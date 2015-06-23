@@ -8,3 +8,4 @@
 11_mips-link-tool.patch
 12_kernel-4.0.patch
 13_glibc-check.patch
+14_mips-fpxx.patch
