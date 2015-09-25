@@ -1,3 +1,11 @@
+valgrind (1:3.11.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release (Closes: #800013)
+    - Fix false positives on socket calls with not specially handled address
+      families (Closes: #798543)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Thu, 24 Sep 2015 09:55:57 +0200
+
 valgrind (1:3.10.1-4) unstable; urgency=medium
 
   * Drop bash completion file (Closes: #789627)
