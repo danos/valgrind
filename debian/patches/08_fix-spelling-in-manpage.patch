@@ -64,7 +64,7 @@ Last-Update: 2013-11-04
  .RS 4
 --- a/docs/xml/manual-core.xml
 +++ b/docs/xml/manual-core.xml
-@@ -2006,7 +2006,7 @@
+@@ -2037,7 +2037,7 @@
              knowledge of the glibc stack cache implementation and by
              examining the debug information of the pthread
              library. This technique is thus somewhat fragile and might
