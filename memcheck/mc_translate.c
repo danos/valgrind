@@ -852,6 +852,17 @@ static IRAtom* mkPCastTo( MCEnv* mce, IRType dst_ty, IRAtom* vbits )
                                        unop(Iop_CmpNEZ64, tmp4));
          break;
       }
+      case Ity_V128: {
+         /* Chop it in half, OR the halves together, and compare that
+          * with zero.
+          */
+         IRAtom* tmp2 = assignNew('V', mce, Ity_I64, unop(Iop_V128HIto64, vbits));
+         IRAtom* tmp3 = assignNew('V', mce, Ity_I64, unop(Iop_V128to64, vbits));
+         IRAtom* tmp4 = assignNew('V', mce, Ity_I64, binop(Iop_Or64, tmp2, tmp3));
+         tmp1         = assignNew('V', mce, Ity_I1,
+                                       unop(Iop_CmpNEZ64, tmp4));
+         break;
+      }
       default:
          ppIRType(src_ty);
          VG_(tool_panic)("mkPCastTo(1)");
@@ -2888,11 +2899,6 @@ IRAtom* expr2vbits_Triop ( MCEnv* mce,
       case Iop_SetElem32x2:
          complainIfUndefined(mce, atom2, NULL);
          return assignNew('V', mce, Ity_I64, triop(op, vatom1, atom2, vatom3));
-      /* BCDIops */
-      case Iop_BCDAdd:
-      case Iop_BCDSub:
-         complainIfUndefined(mce, atom3, NULL);
-         return assignNew('V', mce, Ity_V128, triop(op, vatom1, vatom2, atom3));
 
       /* Vector FP with rounding mode as the first arg */
       case Iop_Add64Fx2:
@@ -3722,6 +3728,10 @@ IRAtom* expr2vbits_Binop ( MCEnv* mce,
             Vector shifts should be fixed too. */
          complainIfUndefined(mce, atom2, NULL);
          return assignNew('V', mce, Ity_V128, binop(op, vatom1, atom2));
+
+      case Iop_BCDAdd:
+      case Iop_BCDSub:
+         return mkLazy2(mce, Ity_V128, vatom1, vatom2);
 
       /* SHA Iops */
       case Iop_SHA256:
@@ -5512,20 +5522,36 @@ static
 void do_AbiHint ( MCEnv* mce, IRExpr* base, Int len, IRExpr* nia )
 {
    IRDirty* di;
-   /* Minor optimisation: if not doing origin tracking, ignore the
-      supplied nia and pass zero instead.  This is on the basis that
-      MC_(helperc_MAKE_STACK_UNINIT) will ignore it anyway, and we can
-      almost always generate a shorter instruction to put zero into a
-      register than any other value. */
-   if (MC_(clo_mc_level) < 3)
-      nia = mkIRExpr_HWord(0);
 
-   di = unsafeIRDirty_0_N(
-           0/*regparms*/,
-           "MC_(helperc_MAKE_STACK_UNINIT)",
-           VG_(fnptr_to_fnentry)( &MC_(helperc_MAKE_STACK_UNINIT) ),
-           mkIRExprVec_3( base, mkIRExpr_HWord( (UInt)len), nia )
-        );
+   if (MC_(clo_mc_level) == 3) {
+      di = unsafeIRDirty_0_N(
+              3/*regparms*/,
+              "MC_(helperc_MAKE_STACK_UNINIT_w_o)",
+              VG_(fnptr_to_fnentry)( &MC_(helperc_MAKE_STACK_UNINIT_w_o) ),
+              mkIRExprVec_3( base, mkIRExpr_HWord( (UInt)len), nia )
+           );
+   } else {
+      /* We ignore the supplied nia, since it is irrelevant. */
+      tl_assert(MC_(clo_mc_level) == 2 || MC_(clo_mc_level) == 1);
+      /* Special-case the len==128 case, since that is for amd64-ELF,
+         which is a very common target. */
+      if (len == 128) {
+         di = unsafeIRDirty_0_N(
+                 1/*regparms*/,
+                 "MC_(helperc_MAKE_STACK_UNINIT_128_no_o)",
+                 VG_(fnptr_to_fnentry)( &MC_(helperc_MAKE_STACK_UNINIT_128_no_o)),
+                 mkIRExprVec_1( base )
+              );
+      } else {
+         di = unsafeIRDirty_0_N(
+                 2/*regparms*/,
+                 "MC_(helperc_MAKE_STACK_UNINIT_no_o)",
+                 VG_(fnptr_to_fnentry)( &MC_(helperc_MAKE_STACK_UNINIT_no_o) ),
+                 mkIRExprVec_2( base, mkIRExpr_HWord( (UInt)len) )
+              );
+      }
+   }
+
    stmt( 'V', mce, IRStmt_Dirty(di) );
 }
 

@@ -1200,7 +1200,7 @@ static UInt deref_UInt ( ThreadId tid, Addr a, const HChar* s )
 {
    UInt* a_p = (UInt*)a;
    PRE_MEM_READ( s, (Addr)a_p, sizeof(UInt) );
-   if (a_p == NULL)
+   if (a_p == NULL || ! ML_(safe_to_deref) (a_p, sizeof(UInt)))
       return 0;
    else
       return *a_p;
@@ -1324,6 +1324,7 @@ static Addr do_brk ( Addr newbrk, ThreadId tid )
       else
          VG_(umsg)("Cannot map memory to grow brk segment in thread #%u "
                    "to %#lx\n", tid, newbrkP);
+      VG_(umsg)("(see section Limitations in user manual)\n");
       goto bad;
    }
 
@@ -3014,9 +3015,6 @@ PRE(sys_execve)
       vg_assert(j == tot_args+1);
    }
 
-   /* restore the DATA rlimit for the child */
-   VG_(setrlimit)(VKI_RLIMIT_DATA, &VG_(client_rlimit_data));
-
    /*
       Set the signal state up for exec.
 
@@ -3267,7 +3265,7 @@ POST(sys_newfstat)
    POST_MEM_WRITE( ARG2, sizeof(struct vki_stat) );
 }
 
-#if !defined(VGO_solaris)
+#if !defined(VGO_solaris) && !defined(VGP_arm64_linux)
 static vki_sigset_t fork_saved_mask;
 
 // In Linux, the sys_fork() function varies across architectures, but we
@@ -3330,7 +3328,7 @@ PRE(sys_fork)
       VG_(sigprocmask)(VKI_SIG_SETMASK, &fork_saved_mask, NULL);
    }
 }
-#endif // !defined(VGO_solaris)
+#endif // !defined(VGO_solaris) && !defined(VGP_arm64_linux)
 
 PRE(sys_ftruncate)
 {
