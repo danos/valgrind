@@ -221,7 +221,7 @@ static HChar** setup_client_env ( HChar** origenv, const HChar* toolname)
    /* ret[0 .. envc-1] is live now. */
    /* Find and remove a binding for VALGRIND_LAUNCHER. */
    for (i = 0; i < envc; i++)
-      if (0 == VG_(memcmp(ret[i], v_launcher, v_launcher_len)))
+      if (0 == VG_(memcmp)(ret[i], v_launcher, v_launcher_len))
          break;
 
    if (i < envc) {
@@ -700,6 +700,12 @@ Addr setup_client_stack( void*  init_sp,
                  use this info to decide to really execute set_tls syscall
                  in syswrap-arm-linux.c rather than to base this on
                  conditional compilation. */
+            }
+#           elif defined(VGP_s390x_linux)
+            {
+               /* Advertise hardware features "below" TE only.  TE and VXRS
+                  (and anything above) are not supported by Valgrind. */
+               auxv->u.a_val &= VKI_HWCAP_S390_TE - 1;
             }
 #           endif
             break;

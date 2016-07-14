@@ -89,7 +89,7 @@
         || (__VALGRIND_MAJOR__ == 3 && __VALGRIND_MINOR__ >= 6))
 */
 #define __VALGRIND_MAJOR__    3
-#define __VALGRIND_MINOR__    11
+#define __VALGRIND_MINOR__    12
 
 
 #include <stdarg.h>
@@ -946,7 +946,7 @@ typedef
                      "move %0, $11\n\t"     /*result*/            \
                      : "=r" (_zzq_result)                         \
                      : "r" (_zzq_default), "r" (&_zzq_args[0])    \
-                     : "$11", "$12");                             \
+                     : "$11", "$12", "memory");                   \
     _zzq_result;                                                  \
   })
 
@@ -1017,7 +1017,7 @@ typedef
                          "move %0, $11\n\t"     /*result*/          \
                          : "=r" (_zzq_result)                       \
                          : "r" (_zzq_default), "r" (&_zzq_args[0])  \
-                         : "$11", "$12");                           \
+                         : "$11", "$12", "memory");                 \
     _zzq_result;                                                    \
   })
 
@@ -6759,6 +6759,7 @@ __inline
 VALGRIND_PRINTF(const char *format, ...)
 {
 #if defined(NVALGRIND)
+   if (format) *(volatile const char *)format;   /* avoid compiler warning */
    return 0;
 #else /* NVALGRIND */
 #if defined(_MSC_VER) || defined(__MINGW64__)
@@ -6797,6 +6798,7 @@ __inline
 VALGRIND_PRINTF_BACKTRACE(const char *format, ...)
 {
 #if defined(NVALGRIND)
+   if (format) *(volatile const char *)format;   /* avoid compiler warning */
    return 0;
 #else /* NVALGRIND */
 #if defined(_MSC_VER) || defined(__MINGW64__)

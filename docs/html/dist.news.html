@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>2. NEWS</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="dist.html" title="Valgrind Distribution Documents">
 <link rel="prev" href="dist.authors.html" title="1. AUTHORS">
@@ -21,7 +21,147 @@
 <div class="titlepage"><div><div><h1 class="title">
 <a name="dist.news"></a>2. NEWS</h1></div></div></div>
 <div class="literallayout"><p><br>
-      <br>
+      Release 3.12.0 (?? ????????? 201?)<br>
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br>
+Release 3.12.0 is under development, not yet released.<br>
+<br>
+* ================== PLATFORM CHANGES =================<br>
+<br>
+* ==================== TOOL CHANGES ====================<br>
+<br>
+* Memcheck:<br>
+<br>
+* Helgrind:<br>
+<br>
+* Callgrind:<br>
+<br>
+* DRD:<br>
+n-i-bz Improved thread startup time significantly on non-Linux platforms.<br>
+<br>
+* ==================== OTHER CHANGES ====================<br>
+<br>
+* Replacement/wrapping of malloc/new related functions is now done not just<br>
+  for system libraries by default, but for any globally defined malloc/new<br>
+  related function (both in shared libraries and staticly linked alternative<br>
+  malloc implementations). Dynamic (runtime) linker is excluded, though.<br>
+  To only intercept malloc/new related functions in<br>
+  system libraries use --soname-synonyms=somalloc=nouserintercepts (where<br>
+  "nouserintercepts" can be any non-existing library name).<br>
+  This new functionality is not implemented for darwin/macosx.<br>
+<br>
+* New and modified GDB server monitor features:<br>
+<br>
+  - Valgrind's gdbserver now accepts the command 'catch syscall'.<br>
+    Note that you must have a GDB &gt;= 7.11 to use 'catch syscall' with<br>
+    gdbserver.<br>
+<br>
+* New option --run-cxx-freeres=&lt;yes|no&gt; can be used to change whether<br>
+  __gnu_cxx::__freeres() cleanup function is called or not. Default is<br>
+  'yes'.<br>
+<br>
+* Valgrind is able to read compressed debuginfo sections in two formats:<br>
+  - zlib ELF gABI format with SHF_COMPRESSED flag (gcc option -gz=zlib)<br>
+  - zlib GNU format with .zdebug sections (gcc option -gz=zlib-gnu)<br>
+<br>
+* ==================== FIXED BUGS ====================<br>
+<br>
+The following bugs have been fixed or resolved.  Note that "n-i-bz"<br>
+stands for "not in bugzilla" -- that is, a bug that was reported to us<br>
+but never got a bugzilla entry.  We encourage you to file bugs in<br>
+bugzilla (https://bugs.kde.org/enter_bug.cgi?product=valgrind) rather<br>
+than mailing the developers (or mailing lists) directly -- bugs that<br>
+are not entered into bugzilla tend to get forgotten about or ignored.<br>
+<br>
+To see details of a given bug, visit<br>
+  https://bugs.kde.org/show_bug.cgi?id=XXXXXX<br>
+where XXXXXX is the bug number as listed below.<br>
+<br>
+191069  Exiting due to signal not reported in XML output<br>
+212352  vex amd64 unhandled opc_aux = 0x 2, first_opcode == 0xDC (FCOM)<br>
+278744  cvtps2pd with redundant RexW<br>
+303877  valgrind doesn't support compressed debuginfo sections.<br>
+345307  Warning about "still reachable" memory when using libstdc++ from gcc 5<br>
+348345  Assertion fails for negative lineno<br>
+351804  Crash on generating suppressions for "printf" call on OS X 10.10<br>
+353083  arm64 doesn't implement various xattr system calls<br>
+353084  arm64 doesn't support sigpending system call<br>
+353137  www: update info for Supported Platforms<br>
+353138  www: update "The Valgrind Developers" page<br>
+353370  don't advertise RDRAND in cpuid for Core-i7-4910-like avx2 machine<br>
+353398  WARNING: unhandled amd64-solaris syscall: 207<br>
+353660  XML in auxwhat tag not escaping reserved symbols properly<br>
+353680  s390x: Crash with certain glibc versions due to non-implemented TBEGIN<br>
+353802  ELF debug info reader confused with multiple .rodata sections<br>
+353891  Assert 'bad_scanned_addr &lt; VG_ROUNDDN(start+len, sizeof(Addr))' failed<br>
+353917  unhandled amd64-solaris syscall fchdir(120)<br>
+353920  unhandled amd64-solaris syscall: 170<br>
+354392  unhandled amd64-solaris syscall: 171<br>
+354797  Vbit test does not include Iops for Power 8 instruction support<br>
+354883  tst-&gt;os_state.pthread - magic_delta assertion failure on OSX 10.11<br>
+        == 361351<br>
+        == 362920<br>
+354933  Fix documentation of --kernel-variant=android-no-hw-tls option<br>
+355188  valgrind should intercept all malloc related global functions<br>
+355454  do not intercept malloc related symbols from the runtime linker<br>
+355455  stderr.exp of test cases wrapmalloc and wrapmallocstatic overconstrained<br>
+356044  Dwarf line info reader misinterprets is_stmt register<br>
+356393  valgrind (vex) crashes because isZeroU happened<br>
+        == 363497<br>
+        == 364497<br>
+356817  valgrind.h triggers compiler errors on MSVC when defining NVALGRIND<br>
+357833  Setting RLIMIT_DATA to zero breaks with linux 4.5+<br>
+357871  pthread_spin_destroy not properly wrapped<br>
+357887  Calls to VG_(fclose) do not close the file descriptor<br>
+358030  support direct socket calls on x86 32bit (new in linux 4.3)<br>
+358478  drd/tests/std_thread.cpp doesn't build with GCC6<br>
+359133  Assertion 'eltSzB &lt;= ddpa-&gt;poolSzB' failed<br>
+359201  futex syscall "skips" argument 5 if op is FUTEX_WAIT_BITSET<br>
+359289  s390x: popcnt (B9E1) not implemented<br>
+359472  The Power PC vsubuqm instruction doesn't always give the correct result<br>
+359503  Add missing syscalls for aarch64 (arm64)<br>
+359703  s390: wire up separate socketcalls system calls<br>
+359724  getsockname might crash - deref_UInt should call safe_to_deref<br>
+359733  amd64 implement ld.so strchr/index override like x86<br>
+359767  Valgrind does not support the IBM POWER ISA 3.0 instructions<br>
+359829  Power PC test suite none/tests/ppc64/test_isa_2_07.c uses<br>
+        uninitialized data<br>
+359871  Incorrect mask handling in ppoll<br>
+360008  Contents of Power vr registers contents is not printed correctly when<br>
+        the --vgdb-shadow-registers=yes option is used<br>
+360035  POWER PC instruction bcdadd and bcdsubtract generate result with<br>
+        non-zero shadow bits<br>
+360425  arm64 unsupported instruction ldpsw<br>
+        == 364435<br>
+360519  none/tests/arm64/memory.vgtest might fail with newer gcc<br>
+360749  kludge for multiple .rodata sections on Solaris no longer needed<br>
+360752  raise the number of reserved fds in m_main.c from 10 to 12<br>
+361207  Valgrind does not support the IBM POWER ISA 3.0 instructions, part 2<br>
+361354  ppc64[le]: wire up separate socketcalls system calls<br>
+361226  s390x: risbgn (EC59) not implemented<br>
+361926  Unhandled Solaris syscall: sysfs(84)<br>
+362009  Valgrind dumps core on unimplemented functionality before threads are created<br>
+362329  Valgrind does not support the IBM POWER ISA 3.0 instructions, part 3<br>
+362894  missing (broken) support for wbit field on mtfsfi instruction (ppc64)<br>
+363680  add renameat2() support<br>
+363705  arm64 missing syscall name_to_handle_at and open_by_handle_at<br>
+363714  ppc64 missing syscalls sync, waitid and name_to/open_by_handle_at<br>
+363858  Add IBM ISA 3.0 support, patch set 4<br>
+364058  clarify in manual limitations of array overruns detections<br>
+364413  pselect sycallwrapper mishandles NULL sigmask<br>
+364728  Power PC, missing support for several HW registers in<br>
+        get_otrack_shadow_offset_wrk()<br>
+365273  Invalid write to stack location reported after signal handler runs<br>
+<br>
+n-i-bz Fix incorrect (or infinite loop) unwind on RHEL7 x86 and amd64<br>
+n-i-bz massif --pages-as-heap=yes does not report peak caused by mmap+munmap<br>
+n-i-bz false positive leaks due to aspacemgr merging non heap segments with heap segments.<br>
+n-i-bz Fix ppoll_alarm exclusion on OS X<br>
+n-i-bz Document brk segment limitation, reference manual in limit reached msg.<br>
+n-i-bz Fix clobber list in none/tests/amd64/xacq_xrel.c [valgrind r15737]<br>
+n-i-bz Bump allowed shift value for "add.w reg, sp, reg, lsl #N" [vex r3206]<br>
+n-i-bz amd64: memcheck false positive with shr %edx<br>
+<br>
+<br>
 Release 3.11.0 (22 September 2015)<br>
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~<br>
 <br>
@@ -217,6 +357,7 @@ where XXXXXX is the bug number as listed below.<br>
 226609  Crediting upstream authors in man page<br>
 231257  Valgrind omits path when executing script from shebang line<br>
 254164  OS X task_info: UNKNOWN task message [id 3405, to mach_task_self() [..]<br>
+294065  Improve the pdb file reader by avoiding hardwired absolute pathnames<br>
 269360  s390x: Fix addressing mode selection for compare-and-swap<br>
 302630  Memcheck: Assertion failed: 'sizeof(UWord) == sizeof(UInt)'<br>
         == 326797<br>
@@ -402,8 +543,7 @@ where XXXXXX is the bug number as listed below.<br>
 351140  arm64 syscalls setuid (146) and setresgid (149) not implemented<br>
 351386  Solaris: Cannot run ld.so.1 under Valgrind<br>
 351474  Fix VG_(iseqsigset) as obvious<br>
-351534  Fix incorrect header guard<br>
-351632  Fix UNKNOWN fcntl 97 on OS X 10.11<br>
+351531  Typo in /include/vki/vki-xen-physdev.h header guard<br>
 351756  Intercept platform_memchr$VARIANT$Haswell on OS X<br>
 351858  ldsoexec support on Solaris<br>
 351873  Newer gcc doesn't allow __builtin_tabortdc[i] in ppc32 mode<br>

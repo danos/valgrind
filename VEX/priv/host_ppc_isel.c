@@ -5392,6 +5392,17 @@ static HReg iselVecExpr_wrk ( ISelEnv* env, IRExpr* e, IREndness IEndianess )
          addInstr(env, PPCInstr_AvHashV128Binary(op, dst, arg1, s_field));
          return dst;
       }
+
+      case Iop_BCDAdd:op = Pav_BCDAdd; goto do_AvBCDV128;
+      case Iop_BCDSub:op = Pav_BCDSub; goto do_AvBCDV128;
+      do_AvBCDV128: {
+         HReg arg1 = iselVecExpr(env, e->Iex.Binop.arg1, IEndianess);
+         HReg arg2 = iselVecExpr(env, e->Iex.Binop.arg2, IEndianess);
+         HReg dst  = newVRegV(env);
+         addInstr(env, PPCInstr_AvBCDV128Binary(op, dst, arg1, arg2));
+         return dst;
+      }
+
       default:
          break;
       } /* switch (e->Iex.Binop.op) */
@@ -5400,17 +5411,6 @@ static HReg iselVecExpr_wrk ( ISelEnv* env, IRExpr* e, IREndness IEndianess )
    if (e->tag == Iex_Triop) {
       IRTriop *triop = e->Iex.Triop.details;
       switch (triop->op) {
-      case Iop_BCDAdd:op = Pav_BCDAdd; goto do_AvBCDV128;
-      case Iop_BCDSub:op = Pav_BCDSub; goto do_AvBCDV128;
-      do_AvBCDV128: {
-         HReg arg1 = iselVecExpr(env, triop->arg1, IEndianess);
-         HReg arg2 = iselVecExpr(env, triop->arg2, IEndianess);
-         HReg dst  = newVRegV(env);
-         PPCRI* ps = iselWordExpr_RI(env, triop->arg3, IEndianess);
-         addInstr(env, PPCInstr_AvBCDV128Trinary(op, dst, arg1, arg2, ps));
-         return dst;
-      }
-
       case Iop_Add32Fx4: fpop = Pavfp_ADDF; goto do_32Fx4_with_rm;
       case Iop_Sub32Fx4: fpop = Pavfp_SUBF; goto do_32Fx4_with_rm;
       case Iop_Mul32Fx4: fpop = Pavfp_MULF; goto do_32Fx4_with_rm;
@@ -6140,15 +6140,16 @@ HInstrArray* iselSB_PPC ( const IRSB* bb,
    vassert(arch_host == VexArchPPC32 || arch_host == VexArchPPC64);
    mode64 = arch_host == VexArchPPC64;
 
-   /* do some sanity checks */
+   /* do some sanity checks,
+    * Note: no 32-bit support for ISA 3.0
+    */
    mask32 = VEX_HWCAPS_PPC32_F | VEX_HWCAPS_PPC32_V
             | VEX_HWCAPS_PPC32_FX | VEX_HWCAPS_PPC32_GX | VEX_HWCAPS_PPC32_VX
             | VEX_HWCAPS_PPC32_DFP | VEX_HWCAPS_PPC32_ISA2_07;
 
-
    mask64 = VEX_HWCAPS_PPC64_V | VEX_HWCAPS_PPC64_FX
             | VEX_HWCAPS_PPC64_GX | VEX_HWCAPS_PPC64_VX | VEX_HWCAPS_PPC64_DFP
-            | VEX_HWCAPS_PPC64_ISA2_07;
+            | VEX_HWCAPS_PPC64_ISA2_07 | VEX_HWCAPS_PPC64_ISA3_0;
 
    if (mode64) {
       vassert((hwcaps_host & mask32) == 0);

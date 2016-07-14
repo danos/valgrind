@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>2. Using and understanding the Valgrind core</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="manual.html" title="Valgrind User Manual">
 <link rel="prev" href="manual-intro.html" title="1. Introduction">
@@ -1662,6 +1662,33 @@ need to use them.</p>
       <code class="filename">libc.so</code>.</p>
 </dd>
 <dt>
+<a name="opt.run-cxx-freeres"></a><span class="term">
+      <code class="option">--run-cxx-freeres=&lt;yes|no&gt; [default: yes] </code>
+    </span>
+</dt>
+<dd>
+<p>This option is only relevant when running Valgrind on Linux
+            or Solaris C++ programs.</p>
+<p>The GNU Standard C++ library (<code class="function">libstdc++.so</code>),
+      which is used by all C++ programs compiled with g++, may allocate memory
+      for its own uses. Usually it doesn't bother to free that memory when
+      the program ends&#8212;there would be no point, since the kernel reclaims
+      all process resources when a process exits anyway, so it would
+      just slow things down.</p>
+<p>The gcc authors realised that this behaviour causes leak
+      checkers, such as Valgrind, to falsely report leaks in libstdc++, when
+      a leak check is done at exit.  In order to avoid this, they
+      provided a routine called <code class="function">__gnu_cxx::__freeres</code>
+      specifically to make libstdc++ release all memory it has allocated.
+      Memcheck therefore tries to run
+      <code class="function">__gnu_cxx::__freeres</code> at exit.</p>
+<p>For the sake of flexibility and unforeseen problems with
+      <code class="function">__gnu_cxx::__freeres</code>, option
+      <code class="option">--run-cxx-freeres=no</code> exists,
+      although at the cost of possibly falsely reporting space leaks in
+      <code class="filename">libstdc++.so</code>.</p>
+</dd>
+<dt>
 <a name="opt.sim-hints"></a><span class="term">
       <code class="option">--sim-hints=hint1,hint2,... </code>
     </span>
@@ -1996,18 +2023,26 @@ need to use them.</p>
     </span>
 </dt>
 <dd>
-<p>When a shared library is loaded, Valgrind checks for 
-      functions in the library that must be replaced or wrapped.
-      For example, Memcheck replaces all malloc related
-      functions (malloc, free, calloc, ...) with its own versions.
-      Such replacements are done by default only in shared libraries whose
-      soname matches a predefined soname pattern (e.g.
-      <code class="varname">libc.so*</code> on linux).
-      By default, no replacement is done for a statically linked
-      library or for alternative libraries such as tcmalloc.
+<p>When a shared library is loaded, Valgrind checks for
+      functions in the library that must be replaced or wrapped.  For
+      example, Memcheck replaces some string and memory functions
+      (strchr, strlen, strcpy, memchr, memcpy, memmove, etc.) with its
+      own versions.  Such replacements are normally done only in shared
+      libraries whose soname matches a predefined soname pattern (e.g.
+      <code class="varname">libc.so*</code> on linux).  By default, no
+      replacement is done for a statically linked binary or for
+      alternative libraries, except for the allocation functions
+      (malloc, free, calloc, memalign, realloc, operator new, operator
+      delete, etc.) Such allocation functions are intercepted by
+      default in any shared library or in the executable if they are
+      exported as global symbols. This means that if a replacement
+      allocation library such as tcmalloc is found, its functions are
+      also intercepted by default.
+
       In some cases, the replacements allow
       <code class="option">--soname-synonyms</code> to specify one additional
-      synonym pattern, giving flexibility in the replacement. </p>
+      synonym pattern, giving flexibility in the replacement.  Or to
+      prevent interception of all public allocation symbols.</p>
 <p>Currently, this flexibility is only allowed for the
       malloc related functions, using the
       synonym <code class="varname">somalloc</code>.  This synonym is usable for
@@ -2017,28 +2052,44 @@ need to use them.</p>
 <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
 <li class="listitem">
 <p>Alternate malloc library: to replace the malloc
-          related functions in an alternate library with
-          soname <code class="varname">mymalloclib.so</code>, give the
+          related functions in a specific alternate library with
+          soname <code class="varname">mymalloclib.so</code> (and not in any
+          others), give the
           option <code class="option">--soname-synonyms=somalloc=mymalloclib.so</code>.
           A pattern can be used to match multiple libraries sonames.
           For
           example, <code class="option">--soname-synonyms=somalloc=*tcmalloc*</code>
-          will match the soname of all variants of the tcmalloc library
-          (native, debug, profiled, ... tcmalloc variants). </p>
+          will match the soname of all variants of the tcmalloc
+          library (native, debug, profiled, ... tcmalloc
+          variants). </p>
 <p>Note: the soname of a elf shared library can be
           retrieved using the readelf utility. </p>
 </li>
-<li class="listitem"><p>Replacements in a statically linked library are done by
-          using the <code class="varname">NONE</code> pattern. For example, if
-          you link with <code class="varname">libtcmalloc.a</code>, memcheck 
-          will properly work when you give the
-          option <code class="option">--soname-synonyms=somalloc=NONE</code>.  Note
-          that a NONE pattern will match the main executable and any
-          shared library having no soname. </p></li>
+<li class="listitem"><p>Replacements in a statically linked library are done
+          by using the <code class="varname">NONE</code> pattern. For example,
+          if you link with <code class="varname">libtcmalloc.a</code>, and only
+          want to intercept the malloc related functions in the
+          executable (and standard libraries) themselves, but not any
+          other shared libraries, you can give the
+          option <code class="option">--soname-synonyms=somalloc=NONE</code>.
+          Note that a NONE pattern will match the main executable and
+          any shared library having no soname. </p></li>
 <li class="listitem"><p>To run a "default" Firefox build for Linux, in which
           JEMalloc is linked in to the main executable,
           use <code class="option">--soname-synonyms=somalloc=NONE</code>.
           </p></li>
+<li class="listitem"><p>To only intercept allocation symbols in the default
+	  system libraries, but not in any other shared library or the
+	  executable defining public malloc or operator new related
+	  functions use a non-existing library name
+	  like <code class="option">--soname-synonyms=somalloc=nouserintercepts</code>
+	  (where <code class="varname">nouserintercepts</code> can be any
+	  non-existing library name).
+	  </p></li>
+<li class="listitem"><p>Shared library of the dynamic (runtime) linker is excluded from
+         searching for global public symbols, such as those for the malloc
+         related functions (identified by <code class="varname">somalloc</code> synonym).
+         </p></li>
 </ul></div>
 </dd>
 </dl>
@@ -2305,6 +2356,15 @@ programs actually work fine.</p>
 <p>Valgrind will run programs on the supported platforms
 subject to the following constraints:</p>
 <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem"><p>On Linux, Valgrind determines at startup the size of the 'brk
+      segment' using the RLIMIT_DATA rlim_cur, with a minimum of 1 MB and
+      a maximum of 8 MB. Valgrind outputs a message each time a program
+      tries to extend the brk segment beyond the size determined at
+      startup.  Most programs will work properly with this limit,
+      typically by switching to the use of mmap to get more memory.
+      If your program really needs a big brk segment, you must change
+      the 8 MB hardcoded limit and recompile Valgrind.
+   </p></li>
 <li class="listitem"><p>On x86 and amd64, there is no support for 3DNow!
    instructions.  If the translator encounters these, Valgrind will
    generate a SIGILL when the instruction is executed.  Apart from

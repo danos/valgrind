@@ -8,7 +8,7 @@
 ##------------------------------------------------------------##
 
 # Process this file with autoconf to produce a configure script.
-AC_INIT([Valgrind],[3.11.0],[valgrind-users@lists.sourceforge.net])
+AC_INIT([Valgrind],[3.12.0.SVN],[valgrind-users@lists.sourceforge.net])
 AC_CONFIG_SRCDIR(coregrind/m_main.c)
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
@@ -160,7 +160,7 @@ case "${is_clang}-${gcc_version}" in
      icc-1[[3-9]].*)
 	AC_MSG_RESULT([ok (ICC version ${gcc_version})])
 	;;
-     notclang-[[3-9]].*|notclang-[[1-9][0-9]]*)
+     notclang-[[3-9]]|notclang-[[3-9]].*|notclang-[[1-9][0-9]]*)
 	AC_MSG_RESULT([ok (${gcc_version})])
 	;;
      clang-2.9|clang-[[3-9]].*|clang-[[1-9][0-9]]*)
@@ -931,32 +931,6 @@ AC_CACHE_CHECK([for using the undefined behaviour sanitiser], vg_cv_ubsan,
       [vg_cv_ubsan=no])])
 
 #----------------------------------------------------------------------------
-# Define MIPS_PAGE_SHIFT (--with-pagesize)
-#----------------------------------------------------------------------------
-AC_ARG_WITH(pagesize,
-   [  --with-pagesize=        override detected page size (4, 16 or 64)],
-   [psize=$withval],
-   [psize=0]
-)
- 
-if test "$psize" = "0"; then
-    psizer=`getconf PAGESIZE`
-    psize=$((${psizer}/1024))
-fi
-
-if test "$psize" = "4"; then
-    AC_DEFINE([MIPS_PAGE_SHIFT], 12, [configured page size 4k])
-elif test "$psize" = "16"; then
-    AC_DEFINE([MIPS_PAGE_SHIFT], 14, [configured page size 16k])
-elif test "$psize" = "64"; then
-    AC_DEFINE([MIPS_PAGE_SHIFT], 16, [configured page size 64k])
-else
-   AC_DEFINE([MIPS_PAGE_SHIFT], 12, [configured default page size 4k])
-fi
-AC_MSG_RESULT([checking for Pagesize... ${psize}k])
-
-
-#----------------------------------------------------------------------------
 # Extra fine-tuning of installation directories
 #----------------------------------------------------------------------------
 AC_ARG_WITH(tmpdir,
@@ -1226,6 +1200,11 @@ AC_DEFINE([HAVE_CLOCK_MONOTONIC], 1,
 ], [
 AC_MSG_RESULT([no])
 ])
+
+
+# Check for ELF32/64_CHDR
+
+AC_CHECK_TYPES([Elf32_Chdr, Elf64_Chdr], [], [], [[#include <elf.h>]])
 
 
 # Check for PTHREAD_RWLOCK_T
@@ -1529,6 +1508,22 @@ CFLAGS=$safe_CFLAGS
 AM_CONDITIONAL(SUPPORTS_HTM, test x$ac_compiler_supports_htm = xyes \
                                -a x$ac_compiler_sees_htm_builtins = xyes \
                                -a x$HWCAP_HAS_HTM = xyes )
+
+# isa 3.0 checking
+AC_MSG_CHECKING([that assembler knows ISA 3.0 ])
+
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+]], [[
+  __asm__ __volatile__("cnttzw 1,2 ");
+]])], [
+ac_asm_have_isa_3_0=yes
+AC_MSG_RESULT([yes])
+], [
+ac_asm_have_isa_3_0=no
+AC_MSG_RESULT([no])
+])
+
+AM_CONDITIONAL(HAS_ISA_3_0, test x$ac_asm_have_isa_3_0 = xyes)
 
 # Check for pthread_create@GLIBC2.0
 AC_MSG_CHECKING([for pthread_create@GLIBC2.0()])
@@ -2099,6 +2094,46 @@ ac_have_dwarf4=no
 AC_MSG_RESULT([no])
 ])
 AM_CONDITIONAL(DWARF4, test x$ac_have_dwarf4 = xyes)
+CFLAGS=$safe_CFLAGS
+
+
+# does this compiler support -g -gz=zlib ?
+
+AC_MSG_CHECKING([if gcc accepts -g -gz=zlib])
+
+safe_CFLAGS=$CFLAGS
+CFLAGS="-g -gz=zlib"
+
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[ ]], [[
+  return 0;
+]])], [
+ac_have_gz_zlib=yes
+AC_MSG_RESULT([yes])
+], [
+ac_have_gz_zlib=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(GZ_ZLIB, test x$ac_have_gz_zlib = xyes)
+CFLAGS=$safe_CFLAGS
+
+
+# does this compiler support -g -gz=zlib-gnu ?
+
+AC_MSG_CHECKING([if gcc accepts -g -gz=zlib-gnu])
+
+safe_CFLAGS=$CFLAGS
+CFLAGS="-g -gz=zlib-gnu"
+
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[ ]], [[
+  return 0;
+]])], [
+ac_have_gz_zlib_gnu=yes
+AC_MSG_RESULT([yes])
+], [
+ac_have_gz_zlib_gnu=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(GZ_ZLIB_GNU, test x$ac_have_gz_zlib_gnu = xyes)
 CFLAGS=$safe_CFLAGS
 
 
@@ -2728,6 +2763,26 @@ AM_CONDITIONAL(SOLARIS_XPG_SYMBOLS_PRESENT, test x$solaris_xpg_symbols_present =
 CFLAGS="$save_CFLAGS"
 
 
+# Solaris-specific check determining if gcc enables largefile support by
+# default for 32-bit executables. If it does, then set SOLARIS_UNDEF_LARGESOURCE
+# variable with gcc flags which disable it.
+#
+AC_MSG_CHECKING([if gcc enables largefile support for 32-bit apps (Solaris-specific)])
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -m32"
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[
+  return _LARGEFILE_SOURCE;
+]])], [
+SOLARIS_UNDEF_LARGESOURCE="-U_LARGEFILE_SOURCE -U_LARGEFILE64_SOURCE -U_FILE_OFFSET_BITS"
+AC_MSG_RESULT([yes])
+], [
+SOLARIS_UNDEF_LARGESOURCE=""
+AC_MSG_RESULT([no])
+])
+CFLAGS=$safe_CFLAGS
+AC_SUBST(SOLARIS_UNDEF_LARGESOURCE)
+
+
 # Solaris-specific check determining if /proc/self/cmdline
 # or /proc/<pid>/cmdline is supported.
 #
@@ -2969,6 +3024,32 @@ AC_MSG_RESULT([no])
 AM_CONDITIONAL(SOLARIS_LWP_NAME_SYSCALL, test x$solaris_lwp_name_syscall = xyes)
 
 
+# Solaris-specific check determining if the new getrandom() syscall is
+# available.
+#
+# New syscall (available on Solaris 11):
+# int getrandom(void *buf, size_t buflen, uint_t flags);
+#
+# C-level symbol: SOLARIS_GETRANDOM_SYSCALL
+# Automake-level symbol: SOLARIS_GETRANDOM_SYSCALL
+#
+AC_MSG_CHECKING([for the new `getrandom' syscall (Solaris-specific)])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/syscall.h>
+]], [[
+  return !SYS_getrandom;
+]])], [
+solaris_getrandom_syscall=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_GETRANDOM_SYSCALL], 1,
+          [Define to 1 if you have the new `getrandom' syscall.])
+], [
+solaris_getrandom_syscall=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(SOLARIS_GETRANDOM_SYSCALL, test x$solaris_getrandom_syscall = xyes)
+
+
 # Solaris-specific check determining if the new zone() syscall subcodes
 # ZONE_LIST_DEFUNCT and ZONE_GETATTR_DEFUNCT are available.  These subcodes
 # were added in Solaris 11 but are missing on illumos.
@@ -2991,6 +3072,31 @@ solaris_zone_defunct=no
 AC_MSG_RESULT([no])
 ])
 AM_CONDITIONAL(SOLARIS_ZONE_DEFUNCT, test x$solaris_zone_defunct = xyes)
+
+
+# Solaris-specific check determining if commands A_GETSTAT and A_SETSTAT
+# for auditon(2) subcode of the auditsys() syscall are available.
+# These commands are available in Solaris 11 and illumos but were removed
+# in Solaris 12.
+#
+# C-level symbol: SOLARIS_AUDITON_STAT
+# Automake-level symbol: SOLARIS_AUDITON_STAT
+#
+AC_MSG_CHECKING([for A_GETSTAT and A_SETSTAT auditon(2) commands (Solaris-specific)])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <bsm/audit.h>
+]], [[
+  return !(A_GETSTAT && A_SETSTAT);
+]])], [
+solaris_auditon_stat=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_AUDITON_STAT], 1,
+          [Define to 1 if you have the `A_GETSTAT' and `A_SETSTAT' constants.])
+], [
+solaris_auditon_stat=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(SOLARIS_AUDITON_STAT, test x$solaris_auditon_stat = xyes)
 
 
 # Solaris-specific check determining if the new shmsys() syscall subcodes
@@ -3142,6 +3248,30 @@ AC_MSG_RESULT([no])
 AM_CONDITIONAL(SOLARIS_TSOL_CLEARANCE, test x$solaris_tsol_clearance = xyes)
 
 
+# Solaris-specific check determining if the new pset() syscall subcode
+# PSET_GET_NAME is available. This subcode was added in Solaris 12 but
+# is missing on illumos and Solaris 11.
+#
+# C-level symbol: SOLARIS_PSET_GET_NAME
+# Automake-level symbol: SOLARIS_PSET_GET_NAME
+#
+AC_MSG_CHECKING([for PSET_GET_NAME (Solaris-specific)])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/pset.h>
+]], [[
+  return !(PSET_GET_NAME);
+]])], [
+solaris_pset_get_name=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_PSET_GET_NAME], 1,
+          [Define to 1 if you have the `PSET_GET_NAME' constants.])
+], [
+solaris_pset_get_name=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(SOLARIS_PSET_GET_NAME, test x$solaris_pset_get_name = xyes)
+
+
 # Solaris-specific check determining if the utimesys() syscall is
 # available (on illumos and older Solaris).
 #
@@ -3209,6 +3339,29 @@ solaris_spawn_syscall=no
 AC_MSG_RESULT([no])
 ])
 AM_CONDITIONAL(SOLARIS_SPAWN_SYSCALL, test x$solaris_spawn_syscall = xyes)
+
+
+# Solaris-specific check determining if commands MODNVL_CTRLMAP through
+# MODDEVINFO_CACHE_TS for modctl() syscall are available (on newer Solaris).
+#
+# C-level symbol: SOLARIS_MODCTL_MODNVL
+# Automake-level symbol: SOLARIS_MODCTL_MODNVL
+#
+AC_MSG_CHECKING([for MODNVL_CTRLMAP through MODDEVINFO_CACHE_TS modctl(2) commands (Solaris-specific)])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/modctl.h>
+]], [[
+  return !(MODNVL_CTRLMAP && MODDEVINFO_CACHE_TS);
+]])], [
+solaris_modctl_modnvl=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_MODCTL_MODNVL], 1,
+          [Define to 1 if you have the `MODNVL_CTRLMAP' through `MODDEVINFO_CACHE_TS' constants.])
+], [
+solaris_modctl_modnvl=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(SOLARIS_MODCTL_MODNVL, test x$solaris_modctl_modnvl = xyes)
 
 
 # Solaris-specific check determining whether nscd (name switch cache daemon)
@@ -3412,6 +3565,90 @@ AC_MSG_RESULT([no])
 ])
 AM_CONDITIONAL(SOLARIS_RESERVE_SYSSTAT_ZONE_ADDR, test x$solaris_reserve_sysstat_zone_addr = xyes)
 
+
+# Solaris-specific check determining if the system_stats() syscall is available
+# (on newer Solaris).
+#
+# C-level symbol: SOLARIS_SYSTEM_STATS_SYSCALL
+# Automake-level symbol: SOLARIS_SYSTEM_STATS_SYSCALL
+#
+AC_MSG_CHECKING([for the `system_stats' syscall (Solaris-specific)])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/syscall.h>
+]], [[
+  return !SYS_system_stats;
+]])], [
+solaris_system_stats_syscall=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_SYSTEM_STATS_SYSCALL], 1,
+          [Define to 1 if you have the `system_stats' syscall.])
+], [
+solaris_system_stats_syscall=no
+AC_MSG_RESULT([no])
+])
+AM_CONDITIONAL(SOLARIS_SYSTEM_STATS_SYSCALL, test x$solaris_system_stats_syscall = xyes)
+
+
+# Solaris-specific check determining if fpregset_t defines struct _fpchip_state
+# (on newer illumos) or struct fpchip_state (Solaris, older illumos).
+#
+# C-level symbol: SOLARIS_FPCHIP_STATE_TAKES_UNDERSCORE
+# Automake-level symbol: none
+#
+AC_CHECK_TYPE([struct _fpchip_state],
+              [solaris_fpchip_state_takes_underscore=yes],
+              [solaris_fpchip_state_takes_underscore=no],
+              [[#include <sys/regset.h>]])
+if test "$solaris_fpchip_state_takes_underscore" = "yes"; then
+  AC_DEFINE(SOLARIS_FPCHIP_STATE_TAKES_UNDERSCORE, 1,
+            [Define to 1 if fpregset_t defines struct _fpchip_state])
+fi
+
+
+# Solaris-specific check determining if schedctl page shared between kernel
+# and userspace program is executable (illumos, older Solaris) or not (newer
+# Solaris).
+#
+# C-level symbol: SOLARIS_SCHEDCTL_PAGE_EXEC
+# Automake-level symbol: none
+#
+AC_MSG_CHECKING([if schedctl page is executable (Solaris-specific)])
+AC_RUN_IFELSE([AC_LANG_PROGRAM([[
+#include <assert.h>
+#include <fcntl.h>
+#include <procfs.h>
+#include <schedctl.h>
+#include <stdio.h>
+#include <unistd.h>
+]], [[
+    schedctl_t *scp = schedctl_init();
+    if (scp == NULL)
+        return 1;
+
+    int fd = open("/proc/self/map", O_RDONLY);
+    assert(fd >= 0);
+
+    prmap_t map;
+    ssize_t rd;
+    while ((rd = read(fd, &map, sizeof(map))) == sizeof(map)) {
+        if (map.pr_vaddr == ((uintptr_t) scp & PAGEMASK)) {
+            fprintf(stderr, "%#lx [%zu] %s\n", map.pr_vaddr, map.pr_size,
+                    (map.pr_mflags & MA_EXEC) ? "x" : "no-x");
+            return (map.pr_mflags & MA_EXEC);
+        }
+    }
+
+    return 1;
+]])], [
+solaris_schedctl_page_exec=no
+AC_MSG_RESULT([no])
+], [
+solaris_schedctl_page_exec=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_SCHEDCTL_PAGE_EXEC], 1,
+          [Define to 1 if you have the schedctl page executable.])
+])
+
 else
 AM_CONDITIONAL(SOLARIS_SUN_STUDIO_AS, false)
 AM_CONDITIONAL(SOLARIS_XPG_SYMBOLS_PRESENT, false)
@@ -3420,22 +3657,27 @@ AM_CONDITIONAL(SOLARIS_OLD_SYSCALLS, false)
 AM_CONDITIONAL(SOLARIS_LWP_SIGQUEUE_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_LWP_SIGQUEUE_SYSCALL_TAKES_PID, false)
 AM_CONDITIONAL(SOLARIS_LWP_NAME_SYSCALL, false)
+AM_CONDITIONAL(SOLARIS_GETRANDOM_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_ZONE_DEFUNCT, false)
+AM_CONDITIONAL(SOLARIS_AUDITON_STAT, false)
 AM_CONDITIONAL(SOLARIS_SHM_NEW, false)
 AM_CONDITIONAL(SOLARIS_PRXREGSET_T, false)
 AM_CONDITIONAL(SOLARIS_FREALPATHAT_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_UUIDSYS_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_TNDB_GET_TNIP, false)
 AM_CONDITIONAL(SOLARIS_TSOL_CLEARANCE, false)
+AM_CONDITIONAL(SOLARIS_PSET_GET_NAME, false)
 AM_CONDITIONAL(SOLARIS_UTIMESYS_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_UTIMENSAT_SYSCALL, false)
 AM_CONDITIONAL(SOLARIS_SPAWN_SYSCALL, false)
+AM_CONDITIONAL(SOLARIS_MODCTL_MODNVL, false)
 AM_CONDITIONAL(SOLARIS_NSCD_DOOR_SYSTEM_VOLATILE, false)
 AM_CONDITIONAL(SOLARIS_GETHRT_FASTTRAP, false)
 AM_CONDITIONAL(SOLARIS_GETZONEOFFSET_FASTTRAP, false)
 AM_CONDITIONAL(SOLARIS_EXECVE_SYSCALL_TAKES_FLAGS, false)
 AM_CONDITIONAL(SOLARIS_RESERVE_SYSSTAT_ADDR, false)
 AM_CONDITIONAL(SOLARIS_RESERVE_SYSSTAT_ZONE_ADDR, false)
+AM_CONDITIONAL(SOLARIS_SYSTEM_STATS_SYSCALL, false)
 fi # test "$VGCONF_OS" = "solaris"
 
 
@@ -3457,6 +3699,7 @@ AC_CHECK_HEADERS([       \
         sys/signal.h     \
         sys/signalfd.h   \
         sys/syscall.h    \
+        sys/sysnvl.h     \
         sys/time.h       \
         sys/types.h      \
         ])
@@ -4038,6 +4281,7 @@ AC_CONFIG_FILES([
    memcheck/tests/darwin/Makefile
    memcheck/tests/solaris/Makefile
    memcheck/tests/amd64-linux/Makefile
+   memcheck/tests/arm64-linux/Makefile
    memcheck/tests/x86-linux/Makefile
    memcheck/tests/amd64-solaris/Makefile
    memcheck/tests/x86-solaris/Makefile

@@ -480,7 +480,18 @@ SysRes VG_(dup) ( Int oldfd )
 
 SysRes VG_(dup2) ( Int oldfd, Int newfd )
 {
-#  if defined(VGO_linux) || defined(VGO_darwin)
+#  if defined(VGP_arm64_linux)
+   /* We only have dup3, that means we have to mimic dup2.
+      The only real difference is when oldfd == newfd.
+      dup3 always returns an error, but dup2 returns only an
+      error if the fd is invalid, otherwise it returns newfd. */
+   if (oldfd == newfd) {
+      if (VG_(fcntl)(oldfd, VKI_F_GETFL, 0) == -1)
+         return VG_(mk_SysRes_Error)(VKI_EBADF);
+      return VG_(mk_SysRes_Success)(newfd);
+   }
+   return VG_(do_syscall3)(__NR_dup3, oldfd, newfd, 0);
+#  elif defined(VGO_linux) || defined(VGO_darwin)
    return VG_(do_syscall2)(__NR_dup2, oldfd, newfd);
 #  elif defined(VGO_solaris)
    return VG_(do_syscall3)(__NR_fcntl, oldfd, F_DUP2FD, newfd);
@@ -504,14 +515,12 @@ Int VG_(fcntl) ( Int fd, Int cmd, Addr arg )
 
 Int VG_(rename) ( const HChar* old_name, const HChar* new_name )
 {
-#  if defined(VGP_tilegx_linux)
-   SysRes res = VG_(do_syscall3)(__NR_renameat, VKI_AT_FDCWD,
-                                 (UWord)old_name, (UWord)new_name);
-#  elif defined(VGO_linux) || defined(VGO_darwin)
-   SysRes res = VG_(do_syscall2)(__NR_rename, (UWord)old_name, (UWord)new_name);
-#  elif defined(VGO_solaris)
+#  if defined(VGO_solaris) \
+      || defined(VGP_arm64_linux) || defined(VGP_tilegx_linux)
    SysRes res = VG_(do_syscall4)(__NR_renameat, VKI_AT_FDCWD, (UWord)old_name,
                                  VKI_AT_FDCWD, (UWord)new_name);
+#  elif defined(VGO_linux) || defined(VGO_darwin)
+   SysRes res = VG_(do_syscall2)(__NR_rename, (UWord)old_name, (UWord)new_name);
 #  else
 #    error "Unknown OS"
 #  endif
@@ -667,6 +676,38 @@ Int VG_(getdents64) (Int fd, struct vki_dirent64 *dirp, UInt count)
    res = VG_(do_syscall3)(__NR_getdents, fd, (UWord)dirp, count);
 #  else
    res = VG_(do_syscall3)(__NR_getdents64, fd, (UWord)dirp, count);
+#     if defined(VGA_mips64)
+      /* The MIPS64 getdents64() system call is only present in 3.10+ kernels.
+         If the getdents64() system call is not available fall back to using
+         getdents() and modify the result to be compatible with getdents64(). */
+      if (sr_isError(res) && (sr_Err(res) == VKI_ENOSYS)) {
+         int r;
+         res = VG_(do_syscall3)(__NR_getdents, fd, (UWord)dirp, count);
+         r = sr_Res(res);
+         if (r > 0) {
+            char *p;
+            char type;
+            union dirents {
+               struct vki_dirent m;
+               struct vki_dirent64 d;
+            } *u;
+            p = (char *)dirp;
+            do {
+               u = (union dirents *)p;
+               /* This should not happen, but just in case... */
+               if (p + u->m.d_reclen > (char *)dirp + r)
+                  break;
+               /* shuffle the dirent */
+               type = *(p + u->m.d_reclen - 1);
+               VG_(memmove)(u->d.d_name, u->m.d_name,
+                            u->m.d_reclen - 2
+                               - offsetof(struct vki_dirent, d_name) + 1);
+               u->d.d_type = type;
+               p += u->m.d_reclen;
+            } while (p < (char *)dirp + r);
+         }
+      }
+#     endif
 #  endif
    return sr_isError(res) ? -1 : sr_Res(res);
 }
