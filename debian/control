@@ -14,8 +14,8 @@ Build-Depends: debhelper (>= 7.0.50~),
  docbook-xml,
  xsltproc
 Standards-Version: 3.9.8
-Vcs-Browser: http://anonscm.debian.org/gitweb/?p=collab-maint/valgrind.git
-Vcs-Git: git://anonscm.debian.org/collab-maint/valgrind.git
+Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/valgrind.git
+Vcs-Git: https://anonscm.debian.org/git/collab-maint/valgrind.git
 Homepage: http://www.valgrind.org/
 Testsuite: autopkgtest
 
