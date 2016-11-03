@@ -10,6 +10,9 @@
 /* DARWIN_VERS value for Mac OS X 10.11 */
 /* #undef DARWIN_10_11 */
 
+/* DARWIN_VERS value for macOS 10.12 */
+/* #undef DARWIN_10_12 */
+
 /* DARWIN_VERS value for Mac OS X 10.5 */
 /* #undef DARWIN_10_5 */
 
@@ -46,9 +49,6 @@
 
 /* Define to 1 if strlen() has been optimized heavily (amd64 glibc >= 2.10) */
 #define GLIBC_MANDATORY_STRLEN_REDIRECT 1
-
-/* Define to 1 if gcc/as can do Altivec. */
-/* #undef HAS_ALTIVEC */
 
 /* Define to 1 if you have the <asm/unistd.h> header file. */
 #define HAVE_ASM_UNISTD_H 1
@@ -324,7 +324,7 @@
 #define PACKAGE_NAME "Valgrind"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Valgrind 3.12.0.SVN"
+#define PACKAGE_STRING "Valgrind 3.12.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "valgrind"
@@ -333,7 +333,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.12.0.SVN"
+#define PACKAGE_VERSION "3.12.0"
 
 /* Define to 1 if you have the `A_GETSTAT' and `A_SETSTAT' constants. */
 /* #undef SOLARIS_AUDITON_STAT */
@@ -394,6 +394,10 @@
 /* Define to 1 if you have the `PSET_GET_NAME' constants. */
 /* #undef SOLARIS_PSET_GET_NAME */
 
+/* Define to 1 if PT_SUNWDTRACE program header provides just an initial thread
+   pointer for libc. */
+/* #undef SOLARIS_PT_SUNDWTRACE_THRP */
+
 /* Version number of the repository door cache protocol. */
 /* #undef SOLARIS_REPCACHE_PROTOCOL_VERSION */
 
@@ -443,7 +447,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Version number of package */
-#define VERSION "3.12.0.SVN"
+#define VERSION "3.12.0"
 
 /* Temporary files directory */
 #define VG_TMPDIR "/tmp"

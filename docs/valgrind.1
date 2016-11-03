@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: VALGRIND
 .\"    Author: [see the "Author" section]
-.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
-.\"      Date: 07/14/2016
-.\"    Manual: Release 3.12.0.SVN
-.\"    Source: Release 3.12.0.SVN
+.\" Generator: DocBook XSL Stylesheets v1.78.1 <http://docbook.sf.net/>
+.\"      Date: 10/21/2016
+.\"    Manual: Release 3.12.0
+.\"    Source: Release 3.12.0
 .\"  Language: English
 .\"
-.TH "VALGRIND" "1" "07/14/2016" "Release 3.12.0.SVN" "Release 3.12.0.SVN"
+.TH "VALGRIND" "1" "10/21/2016" "Release 3.12.0" "Release 3.12.0"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -172,9 +172,7 @@ a comma separated list of one or more of
 \fBstartup exit valgrindabexit\fR\&.
 .sp
 The values
-\fBstartup\fR
-\fBexit\fR
-\fBvalgrindabexit\fR
+\fBstartup\fR\fBexit\fR\fBvalgrindabexit\fR
 respectively indicate to invoke gdbserver before your program is executed, after the last instruction of your program, on Valgrind abnormal exit (e\&.g\&. internal error, out of memory, \&.\&.\&.)\&.
 .sp
 Note:
@@ -270,7 +268,7 @@ program\&. For further details, see
 the commentary
 in the manual\&.
 .RE
-.SH "ERROR\-RELATED OPTIONS"
+.SH "ERROR-RELATED OPTIONS"
 .PP
 These options are used by all tools that can report errors, e\&.g\&. Memcheck, but not Cachegrind\&.
 .PP
@@ -673,7 +671,7 @@ As discussed further in the description of
 By default, Valgrind can handle to up to 500 threads\&. Occasionally, that number is too small\&. Use this option to provide a different limit\&. E\&.g\&.
 \-\-max\-threads=3000\&.
 .RE
-.SH "MALLOC()\-RELATED OPTIONS"
+.SH "MALLOC()-RELATED OPTIONS"
 .PP
 For tools that use their own version of
 malloc
@@ -1540,6 +1538,19 @@ Setting a value of 0 means that all the blocks are re\-circulated in a FIFO orde
 When enabled, assume that reads and writes some small distance below the stack pointer are due to bugs in GCC 2\&.96, and does not report them\&. The "small distance" is 256 bytes by default\&. Note that GCC 2\&.96 is the default compiler on some ancient Linux distributions (RedHat 7\&.X) and so you may need to use this option\&. Do not use it if you do not have to, as it can cause real errors to be overlooked\&. A better alternative is to use a more recent GCC in which this bug is fixed\&.
 .sp
 You may also need to use this option when working with GCC 3\&.X or 4\&.X on 32\-bit PowerPC Linux\&. This is because GCC generates code which occasionally accesses below the stack pointer, particularly for floating\-point to/from integer conversions\&. This is in violation of the 32\-bit PowerPC ELF specification, which makes no provision for locations below the stack pointer to be accessible\&.
+.sp
+This option is deprecated as of version 3\&.12 and may be removed from future versions\&. You should instead use
+\fB\-\-ignore\-range\-below\-sp\fR
+to specify the exact range of offsets below the stack pointer that should be ignored\&. A suitable equivalent is
+\fB\-\-ignore\-range\-below\-sp=1024\-1\fR\&.
+.RE
+.PP
+\fB\-\-ignore\-range\-below\-sp=<number>\-<number> \fR
+.RS 4
+This is a more general replacement for the deprecated
+\fB\-\-workaround\-gcc296\-bugs\fR
+option\&. When specified, it causes Memcheck not to report errors for accesses at the specified offsets below the stack pointer\&. The two offsets must be positive decimal numbers and \-\- somewhat counterintuitively \-\- the first one must be larger, in order to imply a non\-wraparound address range to ignore\&. For example, to ignore 4 byte accesses at 8192 bytes below the stack pointer, use
+\fB\-\-ignore\-range\-below\-sp=8192\-8189\fR\&. Only one range may be specified\&.
 .RE
 .PP
 \fB\-\-show\-mismatched\-frees=<yes|no> [default: yes] \fR
@@ -2311,8 +2322,7 @@ cg_annotate(1), callgrind_annotate(1), callgrind_control(1), ms_print(1),
 $INSTALL/share/doc/valgrind/html/index\&.html
 or
 http://www\&.valgrind\&.org/docs/manual/index\&.html,
-\m[blue]\fBDebugging your program using Valgrind\*(Aqs gdbserver and GDB\fR\m[]\&\s-2\u[1]\d\s+2
-\m[blue]\fBvgdb\fR\m[]\&\s-2\u[2]\d\s+2,
+\m[blue]\fBDebugging your program using Valgrind\*(Aqs gdbserver and GDB\fR\m[]\&\s-2\u[1]\d\s+2\m[blue]\fBvgdb\fR\m[]\&\s-2\u[2]\d\s+2,
 \m[blue]\fBValgrind monitor commands\fR\m[]\&\s-2\u[3]\d\s+2,
 \m[blue]\fBThe Commentary\fR\m[]\&\s-2\u[4]\d\s+2,
 \m[blue]\fBScheduling and Multi\-Thread Performance\fR\m[]\&\s-2\u[5]\d\s+2,

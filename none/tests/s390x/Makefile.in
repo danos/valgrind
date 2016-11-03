@@ -167,7 +167,7 @@ am__EXEEXT_3 = clc$(EXEEXT) clcle$(EXEEXT) cvb$(EXEEXT) cvd$(EXEEXT) \
 	tmll$(EXEEXT) tm$(EXEEXT) stmg$(EXEEXT) ex$(EXEEXT) \
 	clst$(EXEEXT) mvc$(EXEEXT) test_fork$(EXEEXT) \
 	test_sig$(EXEEXT) rounding-6$(EXEEXT) rxsbg$(EXEEXT) \
-	popcnt$(EXEEXT) spechelper-alr$(EXEEXT) \
+	popcnt$(EXEEXT) high-word$(EXEEXT) spechelper-alr$(EXEEXT) \
 	spechelper-algr$(EXEEXT) spechelper-slr$(EXEEXT) \
 	spechelper-slgr$(EXEEXT) spechelper-cr$(EXEEXT) \
 	spechelper-clr$(EXEEXT) spechelper-ltr$(EXEEXT) \
@@ -343,9 +343,7 @@ ex_OBJECTS = ex.$(OBJEXT)
 ex_LDADD = $(LDADD)
 ex_clone_SOURCES = ex_clone.c
 ex_clone_OBJECTS = ex_clone.$(OBJEXT)
-ex_clone_LDADD = $(LDADD)
-ex_clone_LINK = $(CCLD) $(AM_CFLAGS) $(CFLAGS) $(ex_clone_LDFLAGS) \
-	$(LDFLAGS) -o $@
+ex_clone_DEPENDENCIES =
 ex_sig_SOURCES = ex_sig.c
 ex_sig_OBJECTS = ex_sig.$(OBJEXT)
 ex_sig_LDADD = $(LDADD)
@@ -377,6 +375,9 @@ fpext_LINK = $(CCLD) $(fpext_CFLAGS) $(CFLAGS) $(AM_LDFLAGS) \
 fpext_warn_SOURCES = fpext_warn.c
 fpext_warn_OBJECTS = fpext_warn.$(OBJEXT)
 fpext_warn_LDADD = $(LDADD)
+high_word_SOURCES = high-word.c
+high_word_OBJECTS = high-word.$(OBJEXT)
+high_word_LDADD = $(LDADD)
 icm_SOURCES = icm.c
 icm_OBJECTS = icm.$(OBJEXT)
 icm_LDADD = $(LDADD)
@@ -603,18 +604,18 @@ SOURCES = add.c add_EI.c add_GE.c allexec.c and.c and_EI.c bfp-1.c \
 	cu24_1.c cu41.c cu42.c cvb.c cvd.c dfp-1.c dfp-2.c dfp-3.c \
 	dfp-4.c dfpconv.c dfpext.c dfptest.c div.c ecag.c ex.c \
 	ex_clone.c ex_sig.c exrl.c fgx.c fixbr.c flogr.c fold_And16.c \
-	fpconv.c fpext.c fpext_warn.c icm.c insert.c insert_EI.c laa.c \
-	lam_stam.c lpr.c mul.c mul_GE.c mvc.c mvcl.c mvst.c op00.c \
-	op_exception.c or.c or_EI.c pfpo.c popcnt.c rounding-1.c \
-	rounding-2.c rounding-3.c rounding-4.c rounding-5.c \
-	rounding-6.c rxsbg.c spechelper-algr.c spechelper-alr.c \
-	spechelper-clr.c spechelper-cr.c spechelper-icm-1.c \
-	spechelper-icm-2.c spechelper-ltr.c spechelper-or.c \
-	spechelper-slgr.c spechelper-slr.c spechelper-tm.c \
-	spechelper-tmll.c srnm.c srnmb.c srnmt.c srst.c stck.c stcke.c \
-	stckf.c stfle.c stmg.c sub.c sub_EI.c tcxb.c test_fork.c \
-	test_sig.c tm.c tmll.c tr.c tre.c troo.c trot.c trto.c trtt.c \
-	xc.c xor.c xor_EI.c
+	fpconv.c fpext.c fpext_warn.c high-word.c icm.c insert.c \
+	insert_EI.c laa.c lam_stam.c lpr.c mul.c mul_GE.c mvc.c mvcl.c \
+	mvst.c op00.c op_exception.c or.c or_EI.c pfpo.c popcnt.c \
+	rounding-1.c rounding-2.c rounding-3.c rounding-4.c \
+	rounding-5.c rounding-6.c rxsbg.c spechelper-algr.c \
+	spechelper-alr.c spechelper-clr.c spechelper-cr.c \
+	spechelper-icm-1.c spechelper-icm-2.c spechelper-ltr.c \
+	spechelper-or.c spechelper-slgr.c spechelper-slr.c \
+	spechelper-tm.c spechelper-tmll.c srnm.c srnmb.c srnmt.c \
+	srst.c stck.c stcke.c stckf.c stfle.c stmg.c sub.c sub_EI.c \
+	tcxb.c test_fork.c test_sig.c tm.c tmll.c tr.c tre.c troo.c \
+	trot.c trto.c trtt.c xc.c xor.c xor_EI.c
 DIST_SOURCES = add.c add_EI.c add_GE.c allexec.c and.c and_EI.c \
 	bfp-1.c bfp-2.c bfp-3.c bfp-4.c cds.c cdsg.c cgij.c cgrj.c \
 	cij.c cksm.c clc.c clcl.c clcle.c clgij.c clgrj.c clij.c \
@@ -623,18 +624,18 @@ DIST_SOURCES = add.c add_EI.c add_GE.c allexec.c and.c and_EI.c \
 	cu24_1.c cu41.c cu42.c cvb.c cvd.c dfp-1.c dfp-2.c dfp-3.c \
 	dfp-4.c dfpconv.c dfpext.c dfptest.c div.c ecag.c ex.c \
 	ex_clone.c ex_sig.c exrl.c fgx.c fixbr.c flogr.c fold_And16.c \
-	fpconv.c fpext.c fpext_warn.c icm.c insert.c insert_EI.c laa.c \
-	lam_stam.c lpr.c mul.c mul_GE.c mvc.c mvcl.c mvst.c op00.c \
-	op_exception.c or.c or_EI.c pfpo.c popcnt.c rounding-1.c \
-	rounding-2.c rounding-3.c rounding-4.c rounding-5.c \
-	rounding-6.c rxsbg.c spechelper-algr.c spechelper-alr.c \
-	spechelper-clr.c spechelper-cr.c spechelper-icm-1.c \
-	spechelper-icm-2.c spechelper-ltr.c spechelper-or.c \
-	spechelper-slgr.c spechelper-slr.c spechelper-tm.c \
-	spechelper-tmll.c srnm.c srnmb.c srnmt.c srst.c stck.c stcke.c \
-	stckf.c stfle.c stmg.c sub.c sub_EI.c tcxb.c test_fork.c \
-	test_sig.c tm.c tmll.c tr.c tre.c troo.c trot.c trto.c trtt.c \
-	xc.c xor.c xor_EI.c
+	fpconv.c fpext.c fpext_warn.c high-word.c icm.c insert.c \
+	insert_EI.c laa.c lam_stam.c lpr.c mul.c mul_GE.c mvc.c mvcl.c \
+	mvst.c op00.c op_exception.c or.c or_EI.c pfpo.c popcnt.c \
+	rounding-1.c rounding-2.c rounding-3.c rounding-4.c \
+	rounding-5.c rounding-6.c rxsbg.c spechelper-algr.c \
+	spechelper-alr.c spechelper-clr.c spechelper-cr.c \
+	spechelper-icm-1.c spechelper-icm-2.c spechelper-ltr.c \
+	spechelper-or.c spechelper-slgr.c spechelper-slr.c \
+	spechelper-tm.c spechelper-tmll.c srnm.c srnmb.c srnmt.c \
+	srst.c stck.c stcke.c stckf.c stfle.c stmg.c sub.c sub_EI.c \
+	tcxb.c test_fork.c test_sig.c tm.c tmll.c tr.c tre.c troo.c \
+	trot.c trto.c trtt.c xc.c xor.c xor_EI.c
 am__can_run_installinfo = \
   case $$AM_UPDATE_INFO_DIR in \
     n|no|NO) false;; \
@@ -739,6 +740,7 @@ HWCAP_HAS_HTM = @HWCAP_HAS_HTM@
 HWCAP_HAS_ISA_2_05 = @HWCAP_HAS_ISA_2_05@
 HWCAP_HAS_ISA_2_06 = @HWCAP_HAS_ISA_2_06@
 HWCAP_HAS_ISA_2_07 = @HWCAP_HAS_ISA_2_07@
+HWCAP_HAS_ISA_3_00 = @HWCAP_HAS_ISA_3_00@
 HWCAP_HAS_VSX = @HWCAP_HAS_VSX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -826,7 +828,6 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -933,14 +934,14 @@ AM_CFLAGS_PSO_ARM64_LINUX = @FLAG_M64@ $(AM_CFLAGS_BASE) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_ARM64_LINUX = @FLAG_M64@ -g
 AM_FLAG_M3264_X86_DARWIN = -arch i386
 AM_CFLAGS_X86_DARWIN = $(WERROR) -arch i386 $(AM_CFLAGS_BASE) \
-				-mmacosx-version-min=10.5 \
+				-mmacosx-version-min=10.6 \
 				-fno-stack-protector -fno-pic -fno-PIC
 
 AM_CFLAGS_PSO_X86_DARWIN = $(AM_CFLAGS_X86_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_X86_DARWIN = -arch i386 -g
 AM_FLAG_M3264_AMD64_DARWIN = -arch x86_64
 AM_CFLAGS_AMD64_DARWIN = $(WERROR) -arch x86_64 $(AM_CFLAGS_BASE) \
-			    -mmacosx-version-min=10.5 -fno-stack-protector
+			    -mmacosx-version-min=10.6 -fno-stack-protector
 
 AM_CFLAGS_PSO_AMD64_DARWIN = $(AM_CFLAGS_AMD64_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_AMD64_DARWIN = -arch x86_64 -g
@@ -1039,10 +1040,11 @@ INSN_TESTS = clc clcle cvb cvd icm lpr tcxb lam_stam xc mvst add sub \
 	rounding-1 rounding-2 rounding-3 rounding-4 rounding-5 bfp-1 \
 	bfp-2 bfp-3 bfp-4 srnm srnmb comp-1 comp-2 exrl tmll tm stmg \
 	ex clst mvc test_fork test_sig rounding-6 rxsbg popcnt \
-	spechelper-alr spechelper-algr spechelper-slr spechelper-slgr \
-	spechelper-cr spechelper-clr spechelper-ltr spechelper-or \
-	spechelper-icm-1 spechelper-icm-2 spechelper-tmll \
-	spechelper-tm laa $(am__append_8) $(am__append_9)
+	high-word spechelper-alr spechelper-algr spechelper-slr \
+	spechelper-slgr spechelper-cr spechelper-clr spechelper-ltr \
+	spechelper-or spechelper-icm-1 spechelper-icm-2 \
+	spechelper-tmll spechelper-tm laa $(am__append_8) \
+	$(am__append_9)
 EXTRA_DIST = \
 	$(addsuffix .stderr.exp,$(INSN_TESTS)) \
 	$(addsuffix .stdout.exp,$(INSN_TESTS)) \
@@ -1073,7 +1075,7 @@ cu21_1_CFLAGS = $(AM_CFLAGS) -DM3=1
 cu24_1_CFLAGS = $(AM_CFLAGS) -DM3=1
 fixbr_CFLAGS = $(AM_CFLAGS) @FLAG_MLONG_DOUBLE_128@
 fpext_CFLAGS = $(AM_CFLAGS) @FLAG_MLONG_DOUBLE_128@
-ex_clone_LDFLAGS = -lpthread
+ex_clone_LDADD = -lpthread
 all: all-am
 
 .SUFFIXES:
@@ -1322,7 +1324,7 @@ ex$(EXEEXT): $(ex_OBJECTS) $(ex_DEPENDENCIES) $(EXTRA_ex_DEPENDENCIES)
 
 ex_clone$(EXEEXT): $(ex_clone_OBJECTS) $(ex_clone_DEPENDENCIES) $(EXTRA_ex_clone_DEPENDENCIES) 
 	@rm -f ex_clone$(EXEEXT)
-	$(AM_V_CCLD)$(ex_clone_LINK) $(ex_clone_OBJECTS) $(ex_clone_LDADD) $(LIBS)
+	$(AM_V_CCLD)$(LINK) $(ex_clone_OBJECTS) $(ex_clone_LDADD) $(LIBS)
 
 ex_sig$(EXEEXT): $(ex_sig_OBJECTS) $(ex_sig_DEPENDENCIES) $(EXTRA_ex_sig_DEPENDENCIES) 
 	@rm -f ex_sig$(EXEEXT)
@@ -1359,6 +1361,10 @@ fpext$(EXEEXT): $(fpext_OBJECTS) $(fpext_DEPENDENCIES) $(EXTRA_fpext_DEPENDENCIE
 fpext_warn$(EXEEXT): $(fpext_warn_OBJECTS) $(fpext_warn_DEPENDENCIES) $(EXTRA_fpext_warn_DEPENDENCIES) 
 	@rm -f fpext_warn$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(fpext_warn_OBJECTS) $(fpext_warn_LDADD) $(LIBS)
+
+high-word$(EXEEXT): $(high_word_OBJECTS) $(high_word_DEPENDENCIES) $(EXTRA_high_word_DEPENDENCIES) 
+	@rm -f high-word$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(high_word_OBJECTS) $(high_word_LDADD) $(LIBS)
 
 icm$(EXEEXT): $(icm_OBJECTS) $(icm_DEPENDENCIES) $(EXTRA_icm_DEPENDENCIES) 
 	@rm -f icm$(EXEEXT)
@@ -1672,6 +1678,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fpconv.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fpext-fpext.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/fpext_warn.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/high-word.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/icm.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/insert.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/insert_EI.Po@am__quote@

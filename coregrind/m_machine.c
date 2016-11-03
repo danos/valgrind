@@ -1523,7 +1523,7 @@ Bool VG_(machine_get_hwcaps)( void )
      vki_sigaction_fromK_t saved_sigill_act, saved_sigfpe_act;
      vki_sigaction_toK_t     tmp_sigill_act,   tmp_sigfpe_act;
 
-     volatile Bool have_VFP, have_VFP2, have_VFP3, have_NEON;
+     volatile Bool have_VFP, have_VFP2, have_VFP3, have_NEON, have_V8;
      volatile Int archlevel;
      Int r;
 
@@ -1599,6 +1599,19 @@ Bool VG_(machine_get_hwcaps)( void )
            archlevel = 5;
         } else {
            __asm__ __volatile__(".word 0xE6822012"); /* PKHBT r2, r2, r2 */
+        }
+     }
+
+     /* ARMv8 insns */
+     have_V8 = True;
+     if (archlevel == 7) {
+        if (VG_MINIMAL_SETJMP(env_unsup_insn)) {
+           have_V8 = False;
+        } else {
+           __asm__ __volatile__(".word 0xF3044F54"); /* VMAXNM.F32 q2,q2,q2 */
+        }
+        if (have_V8 && have_NEON && have_VFP3) {
+           archlevel = 8;
         }
      }
 
@@ -1725,15 +1738,38 @@ Bool VG_(machine_get_hwcaps)( void )
         }
      }
 
-     /* Check if CPU has FPU and 32 dbl. prec. FP registers */
-     int FIR = 0;
-     __asm__ __volatile__(
-        "cfc1 %0, $0"  "\n\t"
-        : "=r" (FIR)
-     );
-     if (FIR & (1 << FP64)) {
-        vai.hwcaps |= VEX_MIPS_CPU_32FPR;
+#    if defined(VGP_mips32_linux)
+     Int fpmode = VG_(prctl)(VKI_PR_GET_FP_MODE);
+#    else
+     Int fpmode = -1;
+#    endif
+
+     if (fpmode < 0) {
+        /* prctl(PR_GET_FP_MODE) is not supported by Kernel,
+           we are using alternative way to determine FP mode */
+        ULong result = 0;
+
+        if (!VG_MINIMAL_SETJMP(env_unsup_insn)) {
+           __asm__ volatile (
+              ".set push\n\t"
+              ".set noreorder\n\t"
+              ".set oddspreg\n\t"
+              ".set hardfloat\n\t"
+              "lui $t0, 0x3FF0\n\t"
+              "ldc1 $f0, %0\n\t"
+              "mtc1 $t0, $f1\n\t"
+              "sdc1 $f0, %0\n\t"
+              ".set pop\n\t"
+              : "+m"(result)
+              :
+              : "t0", "$f0", "$f1", "memory");
+
+           fpmode = (result != 0x3FF0000000000000ull);
+        }
      }
+
+     if (fpmode != 0)
+        vai.hwcaps |= VEX_MIPS_HOST_FR;
 
      VG_(convert_sigaction_fromK_to_toK)(&saved_sigill_act, &tmp_sigill_act);
      VG_(sigaction)(VKI_SIGILL, &tmp_sigill_act, NULL);
@@ -1758,6 +1794,8 @@ Bool VG_(machine_get_hwcaps)( void )
 #    else
      vai.endness = VexEndness_INVALID;
 #    endif
+
+     vai.hwcaps |= VEX_MIPS_HOST_FR;
 
      VG_(machine_get_cache_info)(&vai);
 

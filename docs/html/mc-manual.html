@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>4. Memcheck: a memory error detector</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="manual.html" title="Valgrind User Manual">
 <link rel="prev" href="manual-core-adv.html" title="3. Using and understanding the Valgrind core: Advanced Topics">
@@ -936,7 +936,31 @@ is <code class="option">--errors-for-leak-kinds=definite,possible</code>
       conversions.  This is in violation of the 32-bit PowerPC ELF
       specification, which makes no provision for locations below the
       stack pointer to be accessible.</p>
+<p>This option is deprecated as of version 3.12 and may be
+      removed from future versions.  You should instead use
+      <code class="option">--ignore-range-below-sp</code> to specify the exact
+      range of offsets below the stack pointer that should be ignored.
+      A suitable equivalent
+      is <code class="option">--ignore-range-below-sp=1024-1</code>.
+      </p>
 </dd>
+<dt>
+<a name="opt.ignore-range-below-sp"></a><span class="term">
+      <code class="option">--ignore-range-below-sp=&lt;number&gt;-&lt;number&gt; </code>
+    </span>
+</dt>
+<dd><p>This is a more general replacement for the deprecated
+      <code class="option">--workaround-gcc296-bugs</code> option.  When
+       specified, it causes Memcheck not to report errors for accesses
+       at the specified offsets below the stack pointer.  The two
+       offsets must be positive decimal numbers and -- somewhat
+       counterintuitively -- the first one must be larger, in order to
+       imply a non-wraparound address range to ignore.  For example,
+       to ignore 4 byte accesses at 8192 bytes below the stack
+       pointer,
+       use <code class="option">--ignore-range-below-sp=8192-8189</code>.  Only
+       one range may be specified.
+      </p></dd>
 <dt>
 <a name="opt.show-mismatched-frees"></a><span class="term">
       <code class="option">--show-mismatched-frees=&lt;yes|no&gt; [default: yes] </code>
@@ -1916,6 +1940,53 @@ inform Memcheck about changes to the state of a mempool:</p>
     pool.  The request simply tells Memcheck that the pool exists, so that
     subsequent calls can refer to it as a pool.
     </p>
+</li>
+<li class="listitem">
+<p>
+      <code class="varname">VALGRIND_CREATE_MEMPOOL_EXT(pool, rzB, is_zeroed, flags)</code>:
+      Create a memory pool with some flags (that can
+      be OR-ed together) specifying extended behaviour.  When flags is
+      zero, the behaviour is identical to
+    <code class="varname">VALGRIND_CREATE_MEMPOOL</code>.</p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: circle; ">
+<li class="listitem"><p> The flag <code class="varname">VALGRIND_MEMPOOL_METAPOOL</code>
+          specifies that the pieces of memory associated with the pool
+          using <code class="varname">VALGRIND_MEMPOOL_ALLOC</code> will be used
+          by the application as superblocks to dole out MALLOC_LIKE
+          blocks using <code class="varname">VALGRIND_MALLOCLIKE_BLOCK</code>.
+          In other words, a meta pool is a "2 levels" pool : first
+          level is the blocks described
+          by <code class="varname">VALGRIND_MEMPOOL_ALLOC</code>.  The second
+          level blocks are described
+          using <code class="varname">VALGRIND_MALLOCLIKE_BLOCK</code>.  Note
+          that the association between the pool and the second level
+          blocks is implicit : second level blocks will be located
+          inside first level blocks. It is necessary to use
+          the <code class="varname">VALGRIND_MEMPOOL_METAPOOL</code> flag for
+          such 2 levels pools, as otherwise valgrind will detect
+          overlapping memory blocks, and will abort execution
+          (e.g. during leak search).
+	</p></li>
+<li class="listitem"><p>
+	  <code class="varname">VALGRIND_MEMPOOL_AUTO_FREE</code>.  Such a meta
+          pool can also be marked as an 'auto free' pool using the
+          flag <code class="varname">VALGRIND_MEMPOOL_AUTO_FREE</code>, which
+          must be OR-ed together with
+          the <code class="varname">VALGRIND_MEMPOOL_METAPOOL</code>. For an
+          'auto free' pool, <code class="varname">VALGRIND_MEMPOOL_FREE</code>
+          will automatically free the second level blocks that are
+          contained inside the first level block freed
+          with <code class="varname">VALGRIND_MEMPOOL_FREE</code>.  In other
+          words, calling <code class="varname">VALGRIND_MEMPOOL_FREE</code> will
+          cause implicit calls
+          to <code class="varname">VALGRIND_FREELIKE_BLOCK</code> for all the
+          second level blocks included in the first level block.
+          Note: it is an error to use
+          the <code class="varname">VALGRIND_MEMPOOL_AUTO_FREE</code> flag
+          without the
+         <code class="varname">VALGRIND_MEMPOOL_METAPOOL</code> flag.
+	</p></li>
+</ul></div>
 </li>
 <li class="listitem"><p><code class="varname">VALGRIND_DESTROY_MEMPOOL(pool)</code>:
     This request tells Memcheck that a pool is being torn down. Memcheck

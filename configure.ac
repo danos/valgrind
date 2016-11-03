@@ -8,7 +8,7 @@
 ##------------------------------------------------------------##
 
 # Process this file with autoconf to produce a configure script.
-AC_INIT([Valgrind],[3.12.0.SVN],[valgrind-users@lists.sourceforge.net])
+AC_INIT([Valgrind],[3.12.0],[valgrind-users@lists.sourceforge.net])
 AC_CONFIG_SRCDIR(coregrind/m_main.c)
 AC_CONFIG_HEADERS([config.h])
 AM_INIT_AUTOMAKE([foreign subdir-objects])
@@ -154,7 +154,7 @@ AM_CONDITIONAL(COMPILER_IS_ICC, test $is_clang = icc)
 # Note: m4 arguments are quoted with [ and ] so square brackets in shell
 # statements have to be quoted.
 case "${is_clang}-${gcc_version}" in
-     applellvm-5.1|applellvm-6.*|applellvm-7.*)
+     applellvm-5.1|applellvm-6.*|applellvm-7.*|applellvm-8.*)
 	AC_MSG_RESULT([ok (Apple LLVM version ${gcc_version})])
 	;;
      icc-1[[3-9]].*)
@@ -167,7 +167,7 @@ case "${is_clang}-${gcc_version}" in
 	AC_MSG_RESULT([ok (clang-${gcc_version})])
 	;;
      *)
-	AC_MSG_RESULT([no (${gcc_version})])
+	AC_MSG_RESULT([no (${is_clang}-${gcc_version})])
 	AC_MSG_ERROR([please use gcc >= 3.0 or clang >= 2.9 or icc >= 13.0])
 	;;
 esac
@@ -353,6 +353,7 @@ case "${host_os}" in
         AC_DEFINE([DARWIN_10_9], 100900, [DARWIN_VERS value for Mac OS X 10.9])
         AC_DEFINE([DARWIN_10_10], 101000, [DARWIN_VERS value for Mac OS X 10.10])
         AC_DEFINE([DARWIN_10_11], 101100, [DARWIN_VERS value for Mac OS X 10.11])
+        AC_DEFINE([DARWIN_10_12], 101200, [DARWIN_VERS value for macOS 10.12])
 
 	AC_MSG_CHECKING([for the kernel version])
 	kernel=`uname -r`
@@ -416,9 +417,15 @@ case "${host_os}" in
 		  DEFAULT_SUPP="darwin15.supp ${DEFAULT_SUPP}"
 		  DEFAULT_SUPP="darwin10-drd.supp ${DEFAULT_SUPP}"
 		  ;;
+	     16.*)
+		  AC_MSG_RESULT([Darwin 16.x (${kernel}) / macOS 10.12 Sierra])
+		  AC_DEFINE([DARWIN_VERS], DARWIN_10_12, [Darwin / Mac OS X version])
+		  DEFAULT_SUPP="darwin16.supp ${DEFAULT_SUPP}"
+		  DEFAULT_SUPP="darwin10-drd.supp ${DEFAULT_SUPP}"
+		  ;;
              *) 
 		  AC_MSG_RESULT([unsupported (${kernel})])
-		  AC_MSG_ERROR([Valgrind works on Darwin 10.x, 11.x, 12.x, 13.x, 14.x and 15.x (Mac OS X 10.6/7/8/9/10/11)])
+		  AC_MSG_ERROR([Valgrind works on Darwin 10.x, 11.x, 12.x, 13.x, 14.x, 15.x and 16.x (Mac OS X 10.6/7/8/9/10/11 and macOS 10.12)])
 		  ;;
 	esac
         ;;
@@ -1346,6 +1353,7 @@ AC_HWCAP_CONTAINS_FLAG([dfp],[HWCAP_HAS_DFP])
 AC_HWCAP_CONTAINS_FLAG([arch_2_05],[HWCAP_HAS_ISA_2_05])
 AC_HWCAP_CONTAINS_FLAG([arch_2_06],[HWCAP_HAS_ISA_2_06])
 AC_HWCAP_CONTAINS_FLAG([arch_2_07],[HWCAP_HAS_ISA_2_07])
+AC_HWCAP_CONTAINS_FLAG([arch_3_00],[HWCAP_HAS_ISA_3_00])
 AC_HWCAP_CONTAINS_FLAG([htm],[HWCAP_HAS_HTM])
 
 # ISA Levels
@@ -1379,8 +1387,6 @@ AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]])], [
 ac_have_altivec=yes
 AC_MSG_RESULT([yes])
-AC_DEFINE([HAS_ALTIVEC], 1,
-          [Define to 1 if gcc/as can do Altivec.])
 ], [
 ac_have_altivec=no
 AC_MSG_RESULT([no])
@@ -1430,8 +1436,12 @@ AM_CONDITIONAL([HAS_VSX], [test x$ac_compiler_supports_vsx_flag = xyes \
 AC_MSG_CHECKING([that assembler knows DFP])
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]], [[
+  #ifdef __s390__
+  __asm__ __volatile__("adtr 1, 2, 3")
+  #else
   __asm__ __volatile__("dadd 1, 2, 3");
   __asm__ __volatile__("dcffix 1, 2");
+  #endif
 ]])], [
 ac_asm_have_dfp=yes
 AC_MSG_RESULT([yes])
@@ -1444,8 +1454,12 @@ safe_CFLAGS=$CFLAGS
 CFLAGS="-mhard-dfp -Werror"
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]], [[
+  #ifdef __s390__
+  __asm__ __volatile__("adtr 1, 2, 3")
+  #else
   __asm__ __volatile__("dadd 1, 2, 3");
   __asm__ __volatile__("dcffix 1, 2");
+  #endif
 ]])], [
 ac_compiler_have_dfp=yes
 AC_MSG_RESULT([yes])
@@ -1470,7 +1484,7 @@ ac_compiler_have_dfp_type=no
 AC_MSG_RESULT([no])
 ])
 AM_CONDITIONAL(BUILD_DFP_TESTS, test x$ac_compiler_have_dfp_type = xyes \
-                                  -a xHWCAP_$HAS_DFP = xyes )
+                                  -a x$HWCAP_HAS_DFP = xyes )
 
 
 # HTM (Hardware Transactional Memory)
@@ -1510,20 +1524,21 @@ AM_CONDITIONAL(SUPPORTS_HTM, test x$ac_compiler_supports_htm = xyes \
                                -a x$HWCAP_HAS_HTM = xyes )
 
 # isa 3.0 checking
-AC_MSG_CHECKING([that assembler knows ISA 3.0 ])
+AC_MSG_CHECKING([that assembler knows ISA 3.00 ])
 
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[
 ]], [[
   __asm__ __volatile__("cnttzw 1,2 ");
 ]])], [
-ac_asm_have_isa_3_0=yes
+ac_asm_have_isa_3_00=yes
 AC_MSG_RESULT([yes])
 ], [
-ac_asm_have_isa_3_0=no
+ac_asm_have_isa_3_00=no
 AC_MSG_RESULT([no])
 ])
 
-AM_CONDITIONAL(HAS_ISA_3_0, test x$ac_asm_have_isa_3_0 = xyes)
+AM_CONDITIONAL(HAS_ISA_3_00, test x$ac_asm_have_isa_3_00 = xyes \
+                             -a x$HWCAP_HAS_ISA_3_00 = xyes])
 
 # Check for pthread_create@GLIBC2.0
 AC_MSG_CHECKING([for pthread_create@GLIBC2.0()])
@@ -2382,6 +2397,26 @@ AC_MSG_RESULT([no])
 AM_CONDITIONAL(BUILD_VPCLMULQDQ_TESTS, test x$ac_have_as_vpclmulqdq = xyes)
 
 
+# does the x86/amd64 assembler understand FMA4 instructions?
+# Note, this doesn't generate a C-level symbol.  It generates a
+# automake-level symbol (BUILD_AFM4_TESTS), used in test Makefile.am's
+AC_MSG_CHECKING([if x86/amd64 assembler supports FMA4 'vfmaddpd'])
+AC_COMPILE_IFELSE([AC_LANG_PROGRAM([[]], [[
+  do {
+   __asm__ __volatile__(
+      "vfmaddpd %%xmm7,%%xmm8,%%xmm6,%%xmm9" : : : );
+  } while (0)
+]])], [
+ac_have_as_vfmaddpd=yes
+AC_MSG_RESULT([yes])
+], [
+ac_have_as_vfmaddpd=no
+AC_MSG_RESULT([no])
+])
+
+AM_CONDITIONAL(BUILD_FMA4_TESTS, test x$ac_have_as_vfmaddpd = xyes)
+
+
 # does the x86/amd64 assembler understand the LZCNT instruction?
 # Note, this doesn't generate a C-level symbol.  It generates a
 # automake-level symbol (BUILD_LZCNT_TESTS), used in test Makefile.am's
@@ -2666,6 +2701,29 @@ AC_MSG_RESULT([no])
 ])
 
 AM_CONDITIONAL(BUILD_IFUNC_TESTS, test x$ac_have_ifunc_attr = xyes)
+
+# Does the C compiler support the armv8 crc feature flag
+# Note, this doesn't generate a C-level symbol.  It generates a
+# automake-level symbol (BUILD_ARMV8_CRC_TESTS), used in test Makefile.am's
+AC_MSG_CHECKING([if gcc supports the armv8 crc feature flag])
+
+save_CFLAGS="$CFLAGS"
+CFLAGS="$CFLAGS -march=armv8-a+crc -Werror"
+AC_COMPILE_IFELSE([AC_LANG_SOURCE([[
+int main()
+{
+    return 0;
+}
+]])], [
+ac_have_armv8_crc_feature=yes
+AC_MSG_RESULT([yes])
+], [
+ac_have_armv8_crc_feature=no
+AC_MSG_RESULT([no])
+])
+CFLAGS="$save_CFLAGS"
+
+AM_CONDITIONAL(BUILD_ARMV8_CRC_TESTS, test x$ac_have_armv8_crc_feature = xyes)
 
 
 # XXX JRS 2010 Oct 13: what is this for?  For sure, we don't need this
@@ -3647,6 +3705,29 @@ solaris_schedctl_page_exec=yes
 AC_MSG_RESULT([yes])
 AC_DEFINE([SOLARIS_SCHEDCTL_PAGE_EXEC], 1,
           [Define to 1 if you have the schedctl page executable.])
+])
+
+
+# Solaris-specific check determining if PT_SUNWDTRACE program header provides
+# scratch space for DTrace fasttrap provider (illumos, older Solaris) or just
+# an initial thread pointer for libc (newer Solaris).
+#
+# C-level symbol: SOLARIS_PT_SUNDWTRACE_THRP
+# Automake-level symbol: none
+#
+AC_MSG_CHECKING([if PT_SUNWDTRACE serves for initial thread pointer (Solaris-specific)])
+AC_RUN_IFELSE([AC_LANG_PROGRAM([[
+#include <sys/fasttrap_isa.h>
+]], [[
+    return !FT_SCRATCHSIZE;
+]])], [
+solaris_pt_sunwdtrace_thrp=yes
+AC_MSG_RESULT([yes])
+AC_DEFINE([SOLARIS_PT_SUNDWTRACE_THRP], 1,
+          [Define to 1 if PT_SUNWDTRACE program header provides just an initial thread pointer for libc.])
+], [
+solaris_pt_sunwdtrace_thrp=no
+AC_MSG_RESULT([no])
 ])
 
 else

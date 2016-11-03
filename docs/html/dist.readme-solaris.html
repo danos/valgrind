@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>12. README.solaris</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<meta name="generator" content="DocBook XSL Stylesheets V1.78.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="dist.html" title="Valgrind Distribution Documents">
 <link rel="prev" href="dist.readme-mips.html" title="11. README.mips">
@@ -75,6 +75,8 @@ Main currently-known incompatibilities:<br>
   syscalls [3]<br>
 - posix_spawn() functionality is backed up by true spawn() syscall on Solaris 12<br>
   whereas illumos and Solaris 11 leverage vfork()<br>
+- illumos and older Solaris use utimesys() syscall whereas newer Solaris<br>
+  uses utimensat()<br>
 <br>
 [1] http://docs.oracle.com/cd/E26502_01/html/E28556/gkzlf.html#gkzip<br>
 [2] https://www.illumos.org/issues/521<br>

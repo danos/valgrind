@@ -9,6 +9,9 @@
 /* DARWIN_VERS value for Mac OS X 10.11 */
 #undef DARWIN_10_11
 
+/* DARWIN_VERS value for macOS 10.12 */
+#undef DARWIN_10_12
+
 /* DARWIN_VERS value for Mac OS X 10.5 */
 #undef DARWIN_10_5
 
@@ -45,9 +48,6 @@
 
 /* Define to 1 if strlen() has been optimized heavily (amd64 glibc >= 2.10) */
 #undef GLIBC_MANDATORY_STRLEN_REDIRECT
-
-/* Define to 1 if gcc/as can do Altivec. */
-#undef HAS_ALTIVEC
 
 /* Define to 1 if you have the <asm/unistd.h> header file. */
 #undef HAVE_ASM_UNISTD_H
@@ -392,6 +392,10 @@
 
 /* Define to 1 if you have the `PSET_GET_NAME' constants. */
 #undef SOLARIS_PSET_GET_NAME
+
+/* Define to 1 if PT_SUNWDTRACE program header provides just an initial thread
+   pointer for libc. */
+#undef SOLARIS_PT_SUNDWTRACE_THRP
 
 /* Version number of the repository door cache protocol. */
 #undef SOLARIS_REPCACHE_PROTOCOL_VERSION
