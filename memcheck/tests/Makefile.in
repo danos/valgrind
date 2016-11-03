@@ -161,12 +161,12 @@ check_PROGRAMS = accounting$(EXEEXT) addressable$(EXEEXT) \
 	inlinfo$(EXEEXT) inltemplate$(EXEEXT) \
 	holey_buffer_too_small$(EXEEXT) leak-0$(EXEEXT) \
 	leak-cases$(EXEEXT) leak-cycle$(EXEEXT) leak-delta$(EXEEXT) \
-	leak-pool$(EXEEXT) leak-tree$(EXEEXT) leak-segv-jmp$(EXEEXT) \
-	long-supps$(EXEEXT) mallinfo$(EXEEXT) \
-	malloc_free_fill$(EXEEXT) malloc_usable$(EXEEXT) \
-	malloc1$(EXEEXT) malloc2$(EXEEXT) malloc3$(EXEEXT) \
-	manuel1$(EXEEXT) manuel2$(EXEEXT) manuel3$(EXEEXT) \
-	match-overrun$(EXEEXT) memalign_test$(EXEEXT) \
+	leak-pool$(EXEEXT) leak-autofreepool$(EXEEXT) \
+	leak-tree$(EXEEXT) leak-segv-jmp$(EXEEXT) long-supps$(EXEEXT) \
+	mallinfo$(EXEEXT) malloc_free_fill$(EXEEXT) \
+	malloc_usable$(EXEEXT) malloc1$(EXEEXT) malloc2$(EXEEXT) \
+	malloc3$(EXEEXT) manuel1$(EXEEXT) manuel2$(EXEEXT) \
+	manuel3$(EXEEXT) match-overrun$(EXEEXT) memalign_test$(EXEEXT) \
 	memalign2$(EXEEXT) memcmptest$(EXEEXT) mempool$(EXEEXT) \
 	mempool2$(EXEEXT) mmaptest$(EXEEXT) mismatches$(EXEEXT) \
 	new_override$(EXEEXT) metadata$(EXEEXT) nanoleak_supp$(EXEEXT) \
@@ -420,6 +420,9 @@ inltemplate_LINK = $(CXXLD) $(inltemplate_CXXFLAGS) $(CXXFLAGS) \
 leak_0_SOURCES = leak-0.c
 leak_0_OBJECTS = leak-0.$(OBJEXT)
 leak_0_LDADD = $(LDADD)
+leak_autofreepool_SOURCES = leak-autofreepool.c
+leak_autofreepool_OBJECTS = leak-autofreepool.$(OBJEXT)
+leak_autofreepool_LDADD = $(LDADD)
 leak_cases_SOURCES = leak-cases.c
 leak_cases_OBJECTS = leak-cases.$(OBJEXT)
 leak_cases_LDADD = $(LDADD)
@@ -849,18 +852,18 @@ SOURCES = accounting.c addressable.c atomic_incs.c badaddrvalue.c \
 	err_disable_arange1.c erringfds.c error_counts.c errs1.c \
 	execve1.c execve2.c exitprog.c file_locking.c fprw.c fwrite.c \
 	holey_buffer_too_small.c inits.c inline.c inlinfo.c \
-	$(inltemplate_SOURCES) leak-0.c leak-cases.c leak-cycle.c \
-	leak-delta.c leak-pool.c leak-segv-jmp.c leak-tree.c \
-	$(leak_cpp_interior_SOURCES) long-supps.c \
-	$(long_namespace_xml_SOURCES) mallinfo.c malloc1.c malloc2.c \
-	malloc3.c malloc_free_fill.c malloc_usable.c manuel1.c \
-	manuel2.c manuel3.c match-overrun.c memalign2.c \
-	memalign_test.c memcmptest.c mempool.c mempool2.c metadata.c \
-	$(mismatches_SOURCES) mmaptest.c nanoleak2.c nanoleak_supp.c \
-	$(new_nothrow_SOURCES) $(new_override_SOURCES) noisy_child.c \
-	null_socket.c origin1-yes.c origin2-not-quite.c origin3-no.c \
-	origin4-many.c origin5-bz2.c origin6-fp.c overlap.c \
-	partial_load.c partiallydefinedeq.c pdb-realloc.c \
+	$(inltemplate_SOURCES) leak-0.c leak-autofreepool.c \
+	leak-cases.c leak-cycle.c leak-delta.c leak-pool.c \
+	leak-segv-jmp.c leak-tree.c $(leak_cpp_interior_SOURCES) \
+	long-supps.c $(long_namespace_xml_SOURCES) mallinfo.c \
+	malloc1.c malloc2.c malloc3.c malloc_free_fill.c \
+	malloc_usable.c manuel1.c manuel2.c manuel3.c match-overrun.c \
+	memalign2.c memalign_test.c memcmptest.c mempool.c mempool2.c \
+	metadata.c $(mismatches_SOURCES) mmaptest.c nanoleak2.c \
+	nanoleak_supp.c $(new_nothrow_SOURCES) $(new_override_SOURCES) \
+	noisy_child.c null_socket.c origin1-yes.c origin2-not-quite.c \
+	origin3-no.c origin4-many.c origin5-bz2.c origin6-fp.c \
+	overlap.c partial_load.c partiallydefinedeq.c pdb-realloc.c \
 	pdb-realloc2.c pipe.c pointer-trace.c post-syscall.c \
 	reach_thread_register.c realloc1.c realloc2.c realloc3.c \
 	recursive-merge.c resvn_stack.c sbfragment.c sendmsg.c \
@@ -888,18 +891,18 @@ DIST_SOURCES = accounting.c addressable.c atomic_incs.c badaddrvalue.c \
 	err_disable_arange1.c erringfds.c error_counts.c errs1.c \
 	execve1.c execve2.c exitprog.c file_locking.c fprw.c fwrite.c \
 	holey_buffer_too_small.c inits.c inline.c inlinfo.c \
-	$(inltemplate_SOURCES) leak-0.c leak-cases.c leak-cycle.c \
-	leak-delta.c leak-pool.c leak-segv-jmp.c leak-tree.c \
-	$(leak_cpp_interior_SOURCES) long-supps.c \
-	$(long_namespace_xml_SOURCES) mallinfo.c malloc1.c malloc2.c \
-	malloc3.c malloc_free_fill.c malloc_usable.c manuel1.c \
-	manuel2.c manuel3.c match-overrun.c memalign2.c \
-	memalign_test.c memcmptest.c mempool.c mempool2.c metadata.c \
-	$(mismatches_SOURCES) mmaptest.c nanoleak2.c nanoleak_supp.c \
-	$(new_nothrow_SOURCES) $(new_override_SOURCES) noisy_child.c \
-	null_socket.c origin1-yes.c origin2-not-quite.c origin3-no.c \
-	origin4-many.c origin5-bz2.c origin6-fp.c overlap.c \
-	partial_load.c partiallydefinedeq.c pdb-realloc.c \
+	$(inltemplate_SOURCES) leak-0.c leak-autofreepool.c \
+	leak-cases.c leak-cycle.c leak-delta.c leak-pool.c \
+	leak-segv-jmp.c leak-tree.c $(leak_cpp_interior_SOURCES) \
+	long-supps.c $(long_namespace_xml_SOURCES) mallinfo.c \
+	malloc1.c malloc2.c malloc3.c malloc_free_fill.c \
+	malloc_usable.c manuel1.c manuel2.c manuel3.c match-overrun.c \
+	memalign2.c memalign_test.c memcmptest.c mempool.c mempool2.c \
+	metadata.c $(mismatches_SOURCES) mmaptest.c nanoleak2.c \
+	nanoleak_supp.c $(new_nothrow_SOURCES) $(new_override_SOURCES) \
+	noisy_child.c null_socket.c origin1-yes.c origin2-not-quite.c \
+	origin3-no.c origin4-many.c origin5-bz2.c origin6-fp.c \
+	overlap.c partial_load.c partiallydefinedeq.c pdb-realloc.c \
 	pdb-realloc2.c pipe.c pointer-trace.c post-syscall.c \
 	reach_thread_register.c realloc1.c realloc2.c realloc3.c \
 	recursive-merge.c resvn_stack.c sbfragment.c sendmsg.c \
@@ -1060,6 +1063,7 @@ HWCAP_HAS_HTM = @HWCAP_HAS_HTM@
 HWCAP_HAS_ISA_2_05 = @HWCAP_HAS_ISA_2_05@
 HWCAP_HAS_ISA_2_06 = @HWCAP_HAS_ISA_2_06@
 HWCAP_HAS_ISA_2_07 = @HWCAP_HAS_ISA_2_07@
+HWCAP_HAS_ISA_3_00 = @HWCAP_HAS_ISA_3_00@
 HWCAP_HAS_VSX = @HWCAP_HAS_VSX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -1147,7 +1151,6 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -1254,14 +1257,14 @@ AM_CFLAGS_PSO_ARM64_LINUX = @FLAG_M64@ $(AM_CFLAGS_BASE) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_ARM64_LINUX = @FLAG_M64@ -g
 AM_FLAG_M3264_X86_DARWIN = -arch i386
 AM_CFLAGS_X86_DARWIN = $(WERROR) -arch i386 $(AM_CFLAGS_BASE) \
-				-mmacosx-version-min=10.5 \
+				-mmacosx-version-min=10.6 \
 				-fno-stack-protector -fno-pic -fno-PIC
 
 AM_CFLAGS_PSO_X86_DARWIN = $(AM_CFLAGS_X86_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_X86_DARWIN = -arch i386 -g
 AM_FLAG_M3264_AMD64_DARWIN = -arch x86_64
 AM_CFLAGS_AMD64_DARWIN = $(WERROR) -arch x86_64 $(AM_CFLAGS_BASE) \
-			    -mmacosx-version-min=10.5 -fno-stack-protector
+			    -mmacosx-version-min=10.6 -fno-stack-protector
 
 AM_CFLAGS_PSO_AMD64_DARWIN = $(AM_CFLAGS_AMD64_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_AMD64_DARWIN = -arch x86_64 -g
@@ -1368,7 +1371,8 @@ dist_noinst_SCRIPTS = \
 	filter_stderr filter_xml \
 	filter_strchr \
 	filter_varinfo3 \
-	filter_memcheck
+	filter_memcheck \
+	filter_overlaperror
 
 noinst_HEADERS = leak.h
 EXTRA_DIST = \
@@ -1461,6 +1465,12 @@ EXTRA_DIST = \
 	leak-pool-3.vgtest leak-pool-3.stderr.exp \
 	leak-pool-4.vgtest leak-pool-4.stderr.exp \
 	leak-pool-5.vgtest leak-pool-5.stderr.exp \
+	leak-autofreepool-0.vgtest leak-autofreepool-0.stderr.exp \
+	leak-autofreepool-1.vgtest leak-autofreepool-1.stderr.exp \
+	leak-autofreepool-2.vgtest leak-autofreepool-2.stderr.exp \
+	leak-autofreepool-4.vgtest leak-autofreepool-4.stderr.exp \
+	leak-autofreepool-5.vgtest leak-autofreepool-5.stderr.exp \
+	leak-autofreepool-6.vgtest leak-autofreepool-6.stderr.exp \
 	leak-tree.vgtest leak-tree.stderr.exp \
 	leak-segv-jmp.vgtest leak-segv-jmp.stderr.exp \
 	lks.vgtest lks.stdout.exp lks.supp lks.stderr.exp \
@@ -1627,7 +1637,7 @@ EXTRA_DIST = \
 leak_cpp_interior_SOURCES = leak_cpp_interior.cpp
 demangle_SOURCES = demangle.cpp
 big_debuginfo_symbol_SOURCES = big_debuginfo_symbol.cpp
-big_debuginfo_symbol_CXXFLAGS = $(AM_CXXFLAGS) -std=c++11
+big_debuginfo_symbol_CXXFLAGS = $(AM_CXXFLAGS) -std=c++0x
 bug340392_CFLAGS = $(AM_CFLAGS) -O3
 dw4_CFLAGS = $(AM_CFLAGS) -gdwarf-4 -fdebug-types-section
 descr_belowsp_LDADD = -lpthread
@@ -2001,6 +2011,10 @@ inltemplate$(EXEEXT): $(inltemplate_OBJECTS) $(inltemplate_DEPENDENCIES) $(EXTRA
 leak-0$(EXEEXT): $(leak_0_OBJECTS) $(leak_0_DEPENDENCIES) $(EXTRA_leak_0_DEPENDENCIES) 
 	@rm -f leak-0$(EXEEXT)
 	$(AM_V_CCLD)$(LINK) $(leak_0_OBJECTS) $(leak_0_LDADD) $(LIBS)
+
+leak-autofreepool$(EXEEXT): $(leak_autofreepool_OBJECTS) $(leak_autofreepool_DEPENDENCIES) $(EXTRA_leak_autofreepool_DEPENDENCIES) 
+	@rm -f leak-autofreepool$(EXEEXT)
+	$(AM_V_CCLD)$(LINK) $(leak_autofreepool_OBJECTS) $(leak_autofreepool_LDADD) $(LIBS)
 
 leak-cases$(EXEEXT): $(leak_cases_OBJECTS) $(leak_cases_DEPENDENCIES) $(EXTRA_leak_cases_DEPENDENCIES) 
 	@rm -f leak-cases$(EXEEXT)
@@ -2465,6 +2479,7 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/inlinfo-inlinfo.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/inltemplate-inltemplate.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/leak-0.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/leak-autofreepool.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/leak-cases.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/leak-cycle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@./$(DEPDIR)/leak-delta.Po@am__quote@

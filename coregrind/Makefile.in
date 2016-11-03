@@ -259,7 +259,8 @@ am__libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_SOURCES_DIST =  \
 	m_debuginfo/tinfl.c m_debuginfo/tytypes.c \
 	m_demangle/cp-demangle.c m_demangle/cplus-dem.c \
 	m_demangle/demangle.c m_demangle/dyn-string.c \
-	m_demangle/safe-ctype.c m_dispatch/dispatch-x86-linux.S \
+	m_demangle/d-demangle.c m_demangle/safe-ctype.c \
+	m_dispatch/dispatch-x86-linux.S \
 	m_dispatch/dispatch-amd64-linux.S \
 	m_dispatch/dispatch-ppc32-linux.S \
 	m_dispatch/dispatch-ppc64be-linux.S \
@@ -405,6 +406,7 @@ am__objects_1 = libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-m_addrinfo.$(OBJEXT
 	m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-cplus-dem.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-demangle.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dyn-string.$(OBJEXT) \
+	m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.$(OBJEXT) \
 	m_dispatch/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dispatch-x86-linux.$(OBJEXT) \
 	m_dispatch/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dispatch-amd64-linux.$(OBJEXT) \
@@ -547,7 +549,8 @@ am__libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_SOURCES_DIST =  \
 	m_debuginfo/tinfl.c m_debuginfo/tytypes.c \
 	m_demangle/cp-demangle.c m_demangle/cplus-dem.c \
 	m_demangle/demangle.c m_demangle/dyn-string.c \
-	m_demangle/safe-ctype.c m_dispatch/dispatch-x86-linux.S \
+	m_demangle/d-demangle.c m_demangle/safe-ctype.c \
+	m_dispatch/dispatch-x86-linux.S \
 	m_dispatch/dispatch-amd64-linux.S \
 	m_dispatch/dispatch-ppc32-linux.S \
 	m_dispatch/dispatch-ppc64be-linux.S \
@@ -692,6 +695,7 @@ am__objects_7 = libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-m_addrinfo.$(OBJEXT
 	m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-cplus-dem.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-demangle.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.$(OBJEXT) \
+	m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.$(OBJEXT) \
 	m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.$(OBJEXT) \
 	m_dispatch/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dispatch-x86-linux.$(OBJEXT) \
 	m_dispatch/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dispatch-amd64-linux.$(OBJEXT) \
@@ -1032,6 +1036,7 @@ HWCAP_HAS_HTM = @HWCAP_HAS_HTM@
 HWCAP_HAS_ISA_2_05 = @HWCAP_HAS_ISA_2_05@
 HWCAP_HAS_ISA_2_06 = @HWCAP_HAS_ISA_2_06@
 HWCAP_HAS_ISA_2_07 = @HWCAP_HAS_ISA_2_07@
+HWCAP_HAS_ISA_3_00 = @HWCAP_HAS_ISA_3_00@
 HWCAP_HAS_VSX = @HWCAP_HAS_VSX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -1119,7 +1124,6 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -1229,14 +1233,14 @@ AM_CFLAGS_PSO_ARM64_LINUX = @FLAG_M64@ $(AM_CFLAGS_BASE) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_ARM64_LINUX = @FLAG_M64@ -g
 AM_FLAG_M3264_X86_DARWIN = -arch i386
 AM_CFLAGS_X86_DARWIN = $(WERROR) -arch i386 $(AM_CFLAGS_BASE) \
-				-mmacosx-version-min=10.5 \
+				-mmacosx-version-min=10.6 \
 				-fno-stack-protector -fno-pic -fno-PIC
 
 AM_CFLAGS_PSO_X86_DARWIN = $(AM_CFLAGS_X86_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_X86_DARWIN = -arch i386 -g
 AM_FLAG_M3264_AMD64_DARWIN = -arch x86_64
 AM_CFLAGS_AMD64_DARWIN = $(WERROR) -arch x86_64 $(AM_CFLAGS_BASE) \
-			    -mmacosx-version-min=10.5 -fno-stack-protector
+			    -mmacosx-version-min=10.6 -fno-stack-protector
 
 AM_CFLAGS_PSO_AMD64_DARWIN = $(AM_CFLAGS_AMD64_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_AMD64_DARWIN = -arch x86_64 -g
@@ -1553,6 +1557,7 @@ COREGRIND_SOURCES_COMMON = \
 	m_demangle/cplus-dem.c \
 	m_demangle/demangle.c \
 	m_demangle/dyn-string.c \
+	m_demangle/d-demangle.c \
 	m_demangle/safe-ctype.c \
 	m_dispatch/dispatch-x86-linux.S \
 	m_dispatch/dispatch-amd64-linux.S \
@@ -1998,6 +2003,9 @@ m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-demangle.$(OBJEXT):  \
 m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dyn-string.$(OBJEXT):  \
 	m_demangle/$(am__dirstamp) \
 	m_demangle/$(DEPDIR)/$(am__dirstamp)
+m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.$(OBJEXT):  \
+	m_demangle/$(am__dirstamp) \
+	m_demangle/$(DEPDIR)/$(am__dirstamp)
 m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.$(OBJEXT):  \
 	m_demangle/$(am__dirstamp) \
 	m_demangle/$(DEPDIR)/$(am__dirstamp)
@@ -2396,6 +2404,9 @@ m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-demangle.$(OBJEXT):  \
 	m_demangle/$(am__dirstamp) \
 	m_demangle/$(DEPDIR)/$(am__dirstamp)
 m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.$(OBJEXT):  \
+	m_demangle/$(am__dirstamp) \
+	m_demangle/$(DEPDIR)/$(am__dirstamp)
+m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.$(OBJEXT):  \
 	m_demangle/$(am__dirstamp) \
 	m_demangle/$(DEPDIR)/$(am__dirstamp)
 m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.$(OBJEXT):  \
@@ -2906,11 +2917,13 @@ distclean-compile:
 @AMDEP_TRUE@@am__include@ @am__quote@m_debuginfo/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-tytypes.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-cp-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-cplus-dem.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dyn-string.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-cp-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-cplus-dem.Po@am__quote@
+@AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-demangle.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.Po@am__quote@
 @AMDEP_TRUE@@am__include@ @am__quote@m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.Po@am__quote@
@@ -5023,6 +5036,20 @@ m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dyn-string.obj: m_demang
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-dyn-string.obj `if test -f 'm_demangle/dyn-string.c'; then $(CYGPATH_W) 'm_demangle/dyn-string.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/dyn-string.c'; fi`
 
+m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.o: m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.o -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.o `test -f 'm_demangle/d-demangle.c' || echo '$(srcdir)/'`m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Tpo m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='m_demangle/d-demangle.c' object='m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.o `test -f 'm_demangle/d-demangle.c' || echo '$(srcdir)/'`m_demangle/d-demangle.c
+
+m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.obj: m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.obj -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.obj `if test -f 'm_demangle/d-demangle.c'; then $(CYGPATH_W) 'm_demangle/d-demangle.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/d-demangle.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Tpo m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='m_demangle/d-demangle.c' object='m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-d-demangle.obj `if test -f 'm_demangle/d-demangle.c'; then $(CYGPATH_W) 'm_demangle/d-demangle.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/d-demangle.c'; fi`
+
 m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.o: m_demangle/safe-ctype.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.o -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.o `test -f 'm_demangle/safe-ctype.c' || echo '$(srcdir)/'`m_demangle/safe-ctype.c
 @am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.Tpo m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_PRI@_@VGCONF_OS@_a-safe-ctype.Po
@@ -6982,6 +7009,20 @@ m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.obj: m_demang
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='m_demangle/dyn-string.c' object='m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.obj' libtool=no @AMDEPBACKSLASH@
 @AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
 @am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-dyn-string.obj `if test -f 'm_demangle/dyn-string.c'; then $(CYGPATH_W) 'm_demangle/dyn-string.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/dyn-string.c'; fi`
+
+m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.o: m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.o -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.o `test -f 'm_demangle/d-demangle.c' || echo '$(srcdir)/'`m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Tpo m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='m_demangle/d-demangle.c' object='m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.o' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.o `test -f 'm_demangle/d-demangle.c' || echo '$(srcdir)/'`m_demangle/d-demangle.c
+
+m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.obj: m_demangle/d-demangle.c
+@am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.obj -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.obj `if test -f 'm_demangle/d-demangle.c'; then $(CYGPATH_W) 'm_demangle/d-demangle.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/d-demangle.c'; fi`
+@am__fastdepCC_TRUE@	$(AM_V_at)$(am__mv) m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Tpo m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.Po
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	$(AM_V_CC)source='m_demangle/d-demangle.c' object='m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.obj' libtool=no @AMDEPBACKSLASH@
+@AMDEP_TRUE@@am__fastdepCC_FALSE@	DEPDIR=$(DEPDIR) $(CCDEPMODE) $(depcomp) @AMDEPBACKSLASH@
+@am__fastdepCC_FALSE@	$(AM_V_CC@am__nodep@)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-d-demangle.obj `if test -f 'm_demangle/d-demangle.c'; then $(CYGPATH_W) 'm_demangle/d-demangle.c'; else $(CYGPATH_W) '$(srcdir)/m_demangle/d-demangle.c'; fi`
 
 m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.o: m_demangle/safe-ctype.c
 @am__fastdepCC_TRUE@	$(AM_V_CC)$(CC) $(DEFS) $(DEFAULT_INCLUDES) $(INCLUDES) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CPPFLAGS) $(CPPFLAGS) $(libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a_CFLAGS) $(CFLAGS) -MT m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.o -MD -MP -MF m_demangle/$(DEPDIR)/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.Tpo -c -o m_demangle/libcoregrind_@VGCONF_ARCH_SEC@_@VGCONF_OS@_a-safe-ctype.o `test -f 'm_demangle/safe-ctype.c' || echo '$(srcdir)/'`m_demangle/safe-ctype.c

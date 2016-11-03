@@ -23,6 +23,7 @@
 # Global stuff
 #----------------------------------------------------------------------------
 
+
 VPATH = @srcdir@
 am__is_gnu_make = { \
   if test -z '$(MAKELEVEL)'; then \
@@ -136,7 +137,7 @@ am__aclocal_m4_deps = $(top_srcdir)/configure.ac
 am__configure_deps = $(am__aclocal_m4_deps) $(CONFIGURE_DEPENDENCIES) \
 	$(ACLOCAL_M4)
 DIST_COMMON = $(srcdir)/Makefile.am $(dist_noinst_SCRIPTS) \
-	$(am__DIST_COMMON)
+	$(noinst_HEADERS) $(am__DIST_COMMON)
 mkinstalldirs = $(install_sh) -d
 CONFIG_HEADER = $(top_builddir)/config.h
 CONFIG_CLEAN_FILES =
@@ -300,6 +301,7 @@ am__can_run_installinfo = \
     n|no|NO) false;; \
     *) (install-info --version) >/dev/null 2>&1;; \
   esac
+HEADERS = $(noinst_HEADERS)
 am__tagged_files = $(HEADERS) $(SOURCES) $(TAGS_FILES) $(LISP)
 # Read a list of newline-separated strings from the standard input,
 # and print each of them once, without duplicates.  Input order is
@@ -399,6 +401,7 @@ HWCAP_HAS_HTM = @HWCAP_HAS_HTM@
 HWCAP_HAS_ISA_2_05 = @HWCAP_HAS_ISA_2_05@
 HWCAP_HAS_ISA_2_06 = @HWCAP_HAS_ISA_2_06@
 HWCAP_HAS_ISA_2_07 = @HWCAP_HAS_ISA_2_07@
+HWCAP_HAS_ISA_3_00 = @HWCAP_HAS_ISA_3_00@
 HWCAP_HAS_VSX = @HWCAP_HAS_VSX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -486,7 +489,6 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -593,14 +595,14 @@ AM_CFLAGS_PSO_ARM64_LINUX = @FLAG_M64@ $(AM_CFLAGS_BASE) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_ARM64_LINUX = @FLAG_M64@ -g
 AM_FLAG_M3264_X86_DARWIN = -arch i386
 AM_CFLAGS_X86_DARWIN = $(WERROR) -arch i386 $(AM_CFLAGS_BASE) \
-				-mmacosx-version-min=10.5 \
+				-mmacosx-version-min=10.6 \
 				-fno-stack-protector -fno-pic -fno-PIC
 
 AM_CFLAGS_PSO_X86_DARWIN = $(AM_CFLAGS_X86_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_X86_DARWIN = -arch i386 -g
 AM_FLAG_M3264_AMD64_DARWIN = -arch x86_64
 AM_CFLAGS_AMD64_DARWIN = $(WERROR) -arch x86_64 $(AM_CFLAGS_BASE) \
-			    -mmacosx-version-min=10.5 -fno-stack-protector
+			    -mmacosx-version-min=10.6 -fno-stack-protector
 
 AM_CFLAGS_PSO_AMD64_DARWIN = $(AM_CFLAGS_AMD64_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_AMD64_DARWIN = -arch x86_64 -g
@@ -689,6 +691,7 @@ AM_CXXFLAGS = -Winline -Wall -Wshadow -Wno-long-long -g \
 AM_CCASFLAGS = $(AM_CPPFLAGS) @FLAG_M64@
 @VGCONF_OS_IS_DARWIN_TRUE@noinst_DSYMS = $(check_PROGRAMS)
 dist_noinst_SCRIPTS = filter_stderr
+noinst_HEADERS = ppc64_helpers.h
 EXTRA_DIST = \
 	jm-int.stderr.exp jm-int.stdout.exp jm-int.vgtest jm-int.stdout.exp-LE \
 	jm-fp.stderr.exp  jm-fp.stdout.exp  jm-fp.vgtest jm-fp.stdout.exp-LE jm-fp.stdout.exp-LE2 jm-fp.stdout.exp-BE2 \
@@ -722,8 +725,10 @@ EXTRA_DIST = \
 	test_touch_tm.stderr.exp test_touch_tm.stdout.exp test_touch_tm.vgtest \
 	ldst_multiple.stderr.exp ldst_multiple.stdout.exp ldst_multiple.vgtest \
 	data-cache-instructions.stderr.exp data-cache-instructions.stdout.exp data-cache-instructions.vgtest \
-	test_isa_3_0_altivec.stderr.exp test_isa_3_0_altivec.stdout.exp test_isa_3_0_altivec.vgtest \
-	test_isa_3_0_other.stderr.exp test_isa_3_0_other.stdout.exp test_isa_3_0_other.vgtest
+	test_isa_3_0_altivec.stderr.exp test_isa_3_0_altivec.stdout.exp \
+	test_isa_3_0_altivec.stdout.exp-LE test_isa_3_0_altivec.vgtest \
+	test_isa_3_0_other.stderr.exp test_isa_3_0_other.stdout.exp \
+   test_isa_3_0_other.stdout.exp-LE test_isa_3_0_other.vgtest
 
 allexec_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
 @HAS_ALTIVEC_FALSE@BUILD_FLAG_ALTIVEC = 
@@ -744,13 +749,13 @@ allexec_CFLAGS = $(AM_CFLAGS) @FLAG_W_NO_NONNULL@
 @HAS_ISA_2_07_TRUE@ISA_2_07_FLAG = -DHAS_ISA_2_07
 @SUPPORTS_HTM_FALSE@HTM_FLAG = 
 @SUPPORTS_HTM_TRUE@HTM_FLAG = -mhtm -DSUPPORTS_HTM
-jm_insns_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames \
+jm_insns_CFLAGS = $(AM_CFLAGS) -Wl,-z,norelro -Winline -Wall -O -g -mregnames \
 			@FLAG_M64@ $(ALTIVEC_FLAG) $(BUILD_FLAG_ALTIVEC)
 
-@HAS_ISA_3_0_FALSE@BUILD_FLAGS_ISA_3_0 = 
-@HAS_ISA_3_0_TRUE@BUILD_FLAGS_ISA_3_0 = -mcpu=power8
-@HAS_ISA_3_0_FALSE@ISA_3_0_FLAG = 
-@HAS_ISA_3_0_TRUE@ISA_3_0_FLAG = -DHAS_ISA_3_0
+@HAS_ISA_3_00_FALSE@BUILD_FLAGS_ISA_3_00 = 
+@HAS_ISA_3_00_TRUE@BUILD_FLAGS_ISA_3_00 = -mcpu=power8
+@HAS_ISA_3_00_FALSE@ISA_3_00_FLAG = 
+@HAS_ISA_3_00_TRUE@ISA_3_00_FLAG = -DHAS_ISA_3_00
 test_isa_2_06_part1_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames $(VSX_FLAG) \
 			@FLAG_M64@ $(ALTIVEC_FLAG) $(BUILD_FLAG_VSX)
 
@@ -787,8 +792,8 @@ test_tm_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames $(HTM_FLAG) $(ISA_
 test_touch_tm_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames $(HTM_FLAG) $(ISA_2_07_FLAG) \
 			@FLAG_M64@ $(BUILD_FLAGS_ISA_2_07)
 
-test_isa_3_0_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames $(HTM_FLAG) $(ISA_3_0_FLAG) \
-			@FLAG_M64@ $(BUILD_FLAGS_ISA_3_0)
+test_isa_3_0_CFLAGS = $(AM_CFLAGS) -Winline -Wall -O -g -mregnames $(HTM_FLAG) $(ISA_3_00_FLAG) \
+			@FLAG_M64@ $(BUILD_FLAGS_ISA_3_00)
 
 test_isa_2_06_part3_LDADD = -lm
 test_dfp1_LDADD = -lm
@@ -1278,7 +1283,7 @@ check-am: all-am
 	$(MAKE) $(AM_MAKEFLAGS) $(check_PROGRAMS)
 	$(MAKE) $(AM_MAKEFLAGS) check-local
 check: check-am
-all-am: Makefile $(SCRIPTS)
+all-am: Makefile $(SCRIPTS) $(HEADERS)
 installdirs:
 install: install-am
 install-exec: install-exec-am

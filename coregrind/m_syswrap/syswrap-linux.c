@@ -270,12 +270,12 @@ static void run_a_thread_NORETURN ( Word tidW )
 #elif defined(VGP_arm64_linux)
       asm volatile (
          "str  %w1, %0\n"     /* set tst->status = VgTs_Empty (32-bit store) */
-         "mov  x8,  %2\n"     /* set %r7 = __NR_exit */
-         "ldr  x0,  %3\n"     /* set %r0 = tst->os_state.exitcode */
+         "mov  x8,  %2\n"     /* set %x8 = __NR_exit */
+         "ldr  x0,  %3\n"     /* set %x0 = tst->os_state.exitcode */
          "svc  0x00000000\n"  /* exit(tst->os_state.exitcode) */
          : "=m" (tst->status)
          : "r" (VgTs_Empty), "n" (__NR_exit), "m" (tst->os_state.exitcode)
-         : "r0", "r7"
+         : "x0", "x8"
       );
 #elif defined(VGP_s390x_linux)
       asm volatile (
@@ -808,26 +808,29 @@ PRE(sys_adjtimex)
    struct vki_timex *tx = (struct vki_timex *)ARG1;
    PRINT("sys_adjtimex ( %#lx )", ARG1);
    PRE_REG_READ1(long, "adjtimex", struct timex *, buf);
-   PRE_MEM_READ( "adjtimex(timex->modes)", ARG1, sizeof(tx->modes));
+
+   if (ML_(safe_to_deref) (tx, sizeof(struct vki_timex))) {
+      PRE_MEM_READ( "adjtimex(timex->modes)", ARG1, sizeof(tx->modes));
 
 #define ADJX(bits,field) 				\
-   if (tx->modes & (bits))                              \
-      PRE_MEM_READ( "adjtimex(timex->"#field")",	\
-		    (Addr)&tx->field, sizeof(tx->field))
+         if (tx->modes & (bits))                              \
+         PRE_MEM_READ( "adjtimex(timex->"#field")",	\
+		       (Addr)&tx->field, sizeof(tx->field))
 
-   if (tx->modes & VKI_ADJ_ADJTIME) {
-      if (!(tx->modes & VKI_ADJ_OFFSET_READONLY))
-         PRE_MEM_READ( "adjtimex(timex->offset)", (Addr)&tx->offset, sizeof(tx->offset));
-   } else {
-      ADJX(VKI_ADJ_OFFSET, offset);
-      ADJX(VKI_ADJ_FREQUENCY, freq);
-      ADJX(VKI_ADJ_MAXERROR, maxerror);
-      ADJX(VKI_ADJ_ESTERROR, esterror);
-      ADJX(VKI_ADJ_STATUS, status);
-      ADJX(VKI_ADJ_TIMECONST|VKI_ADJ_TAI, constant);
-      ADJX(VKI_ADJ_TICK, tick);
-   }
+      if (tx->modes & VKI_ADJ_ADJTIME) {
+         if (!(tx->modes & VKI_ADJ_OFFSET_READONLY))
+            PRE_MEM_READ( "adjtimex(timex->offset)", (Addr)&tx->offset, sizeof(tx->offset));
+      } else {
+         ADJX(VKI_ADJ_OFFSET, offset);
+         ADJX(VKI_ADJ_FREQUENCY, freq);
+         ADJX(VKI_ADJ_MAXERROR, maxerror);
+         ADJX(VKI_ADJ_ESTERROR, esterror);
+         ADJX(VKI_ADJ_STATUS, status);
+         ADJX(VKI_ADJ_TIMECONST|VKI_ADJ_TAI, constant);
+         ADJX(VKI_ADJ_TICK, tick);
+      }
 #undef ADJX
+   }
 
    PRE_MEM_WRITE( "adjtimex(timex)", ARG1, sizeof(struct vki_timex));
 }
@@ -3274,7 +3277,7 @@ PRE(sys_sigaction)
       PRE_MEM_READ( "sigaction(act->sa_handler)", (Addr)&sa->ksa_handler, sizeof(sa->ksa_handler));
       PRE_MEM_READ( "sigaction(act->sa_mask)", (Addr)&sa->sa_mask, sizeof(sa->sa_mask));
       PRE_MEM_READ( "sigaction(act->sa_flags)", (Addr)&sa->sa_flags, sizeof(sa->sa_flags));
-      if (ML_(safe_to_deref)(sa,sizeof(sa)) 
+      if (ML_(safe_to_deref)(sa,sizeof(sa))
           && (sa->sa_flags & VKI_SA_RESTORER))
          PRE_MEM_READ( "sigaction(act->sa_restorer)", (Addr)&sa->sa_restorer, sizeof(sa->sa_restorer));
    }
@@ -3284,26 +3287,43 @@ PRE(sys_sigaction)
       oldp = &old;
    }
 
-   if (ARG2 != 0) {
-      struct vki_old_sigaction *oldnew = (struct vki_old_sigaction *)ARG2;
+   /* If the new or old sigaction is not NULL, but the structs
+      aren't accessible then sigaction returns EFAULT and we cannot
+      use either struct for our own bookkeeping. Just fail early. */
+   if (ARG2 != 0
+       && ! ML_(safe_to_deref)((void *)ARG2,
+                               sizeof(struct vki_old_sigaction))) {
+      VG_(umsg)("Warning: bad act handler address %p in sigaction()\n",
+                (void *)ARG2);
+      SET_STATUS_Failure ( VKI_EFAULT );
+   } else if ((ARG3 != 0
+               && ! ML_(safe_to_deref)((void *)ARG3,
+                                       sizeof(struct vki_old_sigaction)))) {
+      VG_(umsg)("Warning: bad oldact handler address %p in sigaction()\n",
+                (void *)ARG3);
+      SET_STATUS_Failure ( VKI_EFAULT );
+   } else {
+      if (ARG2 != 0) {
+         struct vki_old_sigaction *oldnew = (struct vki_old_sigaction *)ARG2;
 
-      new.ksa_handler = oldnew->ksa_handler;
-      new.sa_flags = oldnew->sa_flags;
-      new.sa_restorer = oldnew->sa_restorer;
-      convert_sigset_to_rt(&oldnew->sa_mask, &new.sa_mask);
-      newp = &new;
-   }
+         new.ksa_handler = oldnew->ksa_handler;
+         new.sa_flags = oldnew->sa_flags;
+         new.sa_restorer = oldnew->sa_restorer;
+         convert_sigset_to_rt(&oldnew->sa_mask, &new.sa_mask);
+         newp = &new;
+      }
 
-   SET_STATUS_from_SysRes( VG_(do_sys_sigaction)(ARG1, newp, oldp) );
+      SET_STATUS_from_SysRes( VG_(do_sys_sigaction)(ARG1, newp, oldp) );
 
-   if (ARG3 != 0 && SUCCESS && RES == 0) {
-      struct vki_old_sigaction *oldold = (struct vki_old_sigaction *)ARG3;
+      if (ARG3 != 0 && SUCCESS && RES == 0) {
+         struct vki_old_sigaction *oldold = (struct vki_old_sigaction *)ARG3;
 
-      oldold->ksa_handler = oldp->ksa_handler;
-      oldold->sa_flags = oldp->sa_flags;
-      oldold->sa_restorer = oldp->sa_restorer;
-      oldold->sa_mask = oldp->sa_mask.sig[0];
-   }
+         oldold->ksa_handler = oldp->ksa_handler;
+         oldold->sa_flags = oldp->sa_flags;
+         oldold->sa_restorer = oldp->sa_restorer;
+         oldold->sa_mask = oldp->sa_mask.sig[0];
+      }
+  }
 }
 POST(sys_sigaction)
 {
@@ -3370,20 +3390,39 @@ PRE(sys_rt_sigaction)
       PRE_MEM_READ( "rt_sigaction(act->sa_handler)", (Addr)&sa->ksa_handler, sizeof(sa->ksa_handler));
       PRE_MEM_READ( "rt_sigaction(act->sa_mask)", (Addr)&sa->sa_mask, sizeof(sa->sa_mask));
       PRE_MEM_READ( "rt_sigaction(act->sa_flags)", (Addr)&sa->sa_flags, sizeof(sa->sa_flags));
-      if (sa->sa_flags & VKI_SA_RESTORER)
+      if (ML_(safe_to_deref)(sa,sizeof(sa))
+          && (sa->sa_flags & VKI_SA_RESTORER))
          PRE_MEM_READ( "rt_sigaction(act->sa_restorer)", (Addr)&sa->sa_restorer, sizeof(sa->sa_restorer));
    }
    if (ARG3 != 0)
       PRE_MEM_WRITE( "rt_sigaction(oldact)", ARG3, sizeof(vki_sigaction_fromK_t));
 
-   // XXX: doesn't seem right to be calling do_sys_sigaction for
-   // sys_rt_sigaction... perhaps this function should be renamed
-   // VG_(do_sys_rt_sigaction)()  --njn
+   /* If the new or old sigaction is not NULL, but the structs
+      aren't accessible then sigaction returns EFAULT and we cannot
+      use either struct for our own bookkeeping. Just fail early. */
+   if (ARG2 != 0
+       && ! ML_(safe_to_deref)((void *)ARG2,
+                               sizeof(vki_sigaction_toK_t))) {
+      VG_(umsg)("Warning: bad act handler address %p in rt_sigaction()\n",
+                (void *)ARG2);
+      SET_STATUS_Failure ( VKI_EFAULT );
+   } else if ((ARG3 != 0
+               && ! ML_(safe_to_deref)((void *)ARG3,
+                                       sizeof(vki_sigaction_fromK_t)))) {
+      VG_(umsg)("Warning: bad oldact handler address %p in rt_sigaction()\n",
+                (void *)ARG3);
+      SET_STATUS_Failure ( VKI_EFAULT );
+   } else {
 
-   SET_STATUS_from_SysRes(
-      VG_(do_sys_sigaction)(ARG1, (const vki_sigaction_toK_t *)ARG2,
-                            (vki_sigaction_fromK_t *)ARG3)
-   );
+      // XXX: doesn't seem right to be calling do_sys_sigaction for
+      // sys_rt_sigaction... perhaps this function should be renamed
+      // VG_(do_sys_rt_sigaction)()  --njn
+
+      SET_STATUS_from_SysRes(
+         VG_(do_sys_sigaction)(ARG1, (const vki_sigaction_toK_t *)ARG2,
+                               (vki_sigaction_fromK_t *)ARG3)
+      );
+   }
 }
 POST(sys_rt_sigaction)
 {
@@ -3405,8 +3444,23 @@ PRE(sys_rt_sigprocmask)
       PRE_MEM_WRITE( "rt_sigprocmask(oldset)", ARG3, sizeof(vki_sigset_t));
 
    // Like the kernel, we fail if the sigsetsize is not exactly what we expect.
+   // Since we want to use the set and oldset for bookkeeping we also want
+   // to make sure they are addressable otherwise, like the kernel, we EFAULT.
    if (sizeof(vki_sigset_t) != ARG4)
-      SET_STATUS_Failure( VKI_EMFILE );
+      SET_STATUS_Failure( VKI_EINVAL );
+   else if (ARG2 != 0
+             && ! ML_(safe_to_deref)((void *)ARG2, sizeof(vki_sigset_t))) {
+            VG_(dmsg)("Warning: Bad set handler address %p in sigprocmask\n",
+                      (void *)ARG2);
+            SET_STATUS_Failure ( VKI_EFAULT );
+         }
+   else if (ARG3 != 0
+             && ! ML_(safe_to_deref)((void *)ARG3, sizeof(vki_sigset_t))) {
+            VG_(dmsg)("Warning: Bad oldset address %p in sigprocmask\n",
+                      (void *)ARG3);
+            SET_STATUS_Failure ( VKI_EFAULT );
+         }
+
    else {
       SET_STATUS_from_SysRes( 
                   VG_(do_sys_sigprocmask) ( tid, ARG1 /*how*/, 
@@ -4950,8 +5004,8 @@ PRE(sys_process_vm_readv)
                  ARG2, ARG3 * sizeof(struct vki_iovec) );
    PRE_MEM_READ( "process_vm_readv(rvec)",
                  ARG4, ARG5 * sizeof(struct vki_iovec) );
-   if (ARG2 != 0) {
-      /* TODO: Don't do any of the following if lvec is invalid */
+   if (ARG2 != 0
+       && ML_(safe_to_deref) ((void *)ARG2, sizeof(struct vki_iovec) * ARG3)) {
       const struct vki_iovec *vec = (const struct vki_iovec *)ARG2;
       UInt i;
       for (i = 0; i < ARG3; i++)
@@ -4988,8 +5042,8 @@ PRE(sys_process_vm_writev)
                  ARG2, ARG3 * sizeof(struct vki_iovec) );
    PRE_MEM_READ( "process_vm_writev(rvec)",
                  ARG4, ARG5 * sizeof(struct vki_iovec) );
-   if (ARG2 != 0) {
-      /* TODO: Don't do any of the following if lvec is invalid */
+   if (ARG2 != 0
+       && ML_(safe_to_deref) ((void *)ARG2, sizeof(struct vki_iovec) * ARG3)) {
       const struct vki_iovec *vec = (const struct vki_iovec *)ARG2;
       UInt i;
       for (i = 0; i < ARG3; i++)
@@ -5292,10 +5346,14 @@ PRE(sys_vmsplice)
       for (iov = (struct vki_iovec *)ARG2;
            iov < (struct vki_iovec *)ARG2 + ARG3; iov++) 
       {
-         if ((fdfl & VKI_O_ACCMODE) == VKI_O_RDONLY)
-            PRE_MEM_WRITE( "vmsplice(iov[...])", (Addr)iov->iov_base, iov->iov_len );
-         else
-            PRE_MEM_READ( "vmsplice(iov[...])", (Addr)iov->iov_base, iov->iov_len );
+         if (ML_(safe_to_deref) (iov, sizeof(struct vki_iovec))) {
+            if ((fdfl & VKI_O_ACCMODE) == VKI_O_RDONLY)
+               PRE_MEM_WRITE( "vmsplice(iov[...])",
+                             (Addr)iov->iov_base, iov->iov_len );
+            else
+               PRE_MEM_READ( "vmsplice(iov[...])",
+                            (Addr)iov->iov_base, iov->iov_len );
+         }
       }
    }
 }
@@ -5429,7 +5487,8 @@ PRE(sys_fcntl)
 
    default:
       PRINT("sys_fcntl[UNKNOWN] ( %lu, %lu, %lu )", ARG1, ARG2, ARG3);
-      I_die_here;
+      VG_(umsg)("Warning: unimplemented fcntl command: %lu\n", ARG2);
+      SET_STATUS_Failure( VKI_EINVAL );
       break;
    }
 
@@ -5580,6 +5639,10 @@ PRE(sys_ioctl)
    case VKI_FIOCLEX:
    case VKI_FIONCLEX:
    case VKI_TIOCNOTTY:
+
+   /* linux perf_event ioctls */
+   case VKI_PERF_EVENT_IOC_ENABLE:
+   case VKI_PERF_EVENT_IOC_DISABLE:
 
       /* linux/soundcard interface (ALSA) */
    case VKI_SNDRV_PCM_IOCTL_HW_FREE:
@@ -7082,7 +7145,8 @@ PRE(sys_ioctl)
       break;
 
 #  if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android) \
-      || defined(VGPV_mips32_linux_android)
+      || defined(VGPV_mips32_linux_android) \
+      || defined(VGPV_arm64_linux_android)
    /* ashmem */
    case VKI_ASHMEM_GET_SIZE:
    case VKI_ASHMEM_SET_SIZE:
@@ -8436,6 +8500,25 @@ PRE(sys_ioctl)
       break;
    }
 
+   case VKI_PERF_EVENT_IOC_RESET:
+   case VKI_PERF_EVENT_IOC_REFRESH:
+   case VKI_PERF_EVENT_IOC_SET_OUTPUT:
+   case VKI_PERF_EVENT_IOC_SET_BPF:
+      /* These take scalar arguments, so already handled above */
+      break;
+
+   case VKI_PERF_EVENT_IOC_PERIOD:
+      PRE_MEM_READ("ioctl(VKI_PERF_EVENT_IOC_PERIOD)", (Addr)ARG3, sizeof(__vki_u64));
+      break;
+
+   case VKI_PERF_EVENT_IOC_SET_FILTER:
+      PRE_MEM_RASCIIZ("ioctl(VKI_PERF_EVENT_IOC_SET_FILTER).filter", ARG3);
+      break;
+
+   case VKI_PERF_EVENT_IOC_ID:
+      PRE_MEM_WRITE("ioctl(VKI_PERF_EVENT_IOC_ID)", (Addr)ARG3, sizeof(__vki_u64));
+      break;
+
    default:
       /* EVIOC* are variable length and return size written on success */
       switch (ARG2 & ~(_VKI_IOC_SIZEMASK << _VKI_IOC_SIZESHIFT)) {
@@ -9574,7 +9657,8 @@ POST(sys_ioctl)
       break;
 
 #  if defined(VGPV_arm_linux_android) || defined(VGPV_x86_linux_android) \
-      || defined(VGPV_mips32_linux_android)
+      || defined(VGPV_mips32_linux_android) \
+      || defined(VGPV_arm64_linux_android)
    /* ashmem */
    case VKI_ASHMEM_GET_SIZE:
    case VKI_ASHMEM_SET_SIZE:
@@ -10325,6 +10409,20 @@ POST(sys_ioctl)
       break;
    }
    case VKI_TIOCSSERIAL:
+      break;
+
+   case VKI_PERF_EVENT_IOC_ENABLE:
+   case VKI_PERF_EVENT_IOC_DISABLE:
+   case VKI_PERF_EVENT_IOC_REFRESH:
+   case VKI_PERF_EVENT_IOC_RESET:
+   case VKI_PERF_EVENT_IOC_PERIOD:
+   case VKI_PERF_EVENT_IOC_SET_OUTPUT:
+   case VKI_PERF_EVENT_IOC_SET_FILTER:
+   case VKI_PERF_EVENT_IOC_SET_BPF:
+      break;
+
+   case VKI_PERF_EVENT_IOC_ID:
+      POST_MEM_WRITE((Addr)ARG3, sizeof(__vki_u64));
       break;
 
    default:

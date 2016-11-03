@@ -122,13 +122,16 @@ host_triplet = @host@
 @COMPILER_IS_CLANG_TRUE@am__append_7 = -Wno-unused-private-field    # drd/tests/tsan_unittest.cpp
 check_PROGRAMS = bt_everything$(EXEEXT) bug132146$(EXEEXT) \
 	bug279698$(EXEEXT) fxsave-amd64$(EXEEXT) insn-bsfl$(EXEEXT) \
-	insn-pmovmskb$(EXEEXT) sh-mem-vec128$(EXEEXT) shr_edx$(EXEEXT) \
+	insn-pmovmskb$(EXEEXT) sh-mem-vec128$(EXEEXT) \
 	sse_memory$(EXEEXT) xor-undef-amd64$(EXEEXT) $(am__EXEEXT_1) \
 	$(am__EXEEXT_2) $(am__EXEEXT_3)
 @BUILD_AVX_TESTS_TRUE@am__append_8 = sh-mem-vec256 xsave-avx
 @HAVE_ASM_CONSTRAINT_P_TRUE@am__append_9 = insn-pcmpistri
 # clang 3.5.0 barfs about -mfancy-math-387
-@COMPILER_IS_CLANG_FALSE@am__append_10 = more_x87_fp
+@COMPILER_IS_CLANG_FALSE@am__append_10 = \
+@COMPILER_IS_CLANG_FALSE@ 	more_x87_fp \
+@COMPILER_IS_CLANG_FALSE@ 	shr_edx
+
 @VGCONF_OS_IS_SOLARIS_TRUE@am__append_11 = --std=c99
 subdir = memcheck/tests/amd64
 ACLOCAL_M4 = $(top_srcdir)/aclocal.m4
@@ -144,7 +147,8 @@ CONFIG_CLEAN_VPATH_FILES =
 @BUILD_AVX_TESTS_TRUE@am__EXEEXT_1 = sh-mem-vec256$(EXEEXT) \
 @BUILD_AVX_TESTS_TRUE@	xsave-avx$(EXEEXT)
 @HAVE_ASM_CONSTRAINT_P_TRUE@am__EXEEXT_2 = insn-pcmpistri$(EXEEXT)
-@COMPILER_IS_CLANG_FALSE@am__EXEEXT_3 = more_x87_fp$(EXEEXT)
+@COMPILER_IS_CLANG_FALSE@am__EXEEXT_3 = more_x87_fp$(EXEEXT) \
+@COMPILER_IS_CLANG_FALSE@	shr_edx$(EXEEXT)
 bt_everything_SOURCES = bt_everything.c
 bt_everything_OBJECTS = bt_everything.$(OBJEXT)
 bt_everything_LDADD = $(LDADD)
@@ -336,6 +340,7 @@ HWCAP_HAS_HTM = @HWCAP_HAS_HTM@
 HWCAP_HAS_ISA_2_05 = @HWCAP_HAS_ISA_2_05@
 HWCAP_HAS_ISA_2_06 = @HWCAP_HAS_ISA_2_06@
 HWCAP_HAS_ISA_2_07 = @HWCAP_HAS_ISA_2_07@
+HWCAP_HAS_ISA_3_00 = @HWCAP_HAS_ISA_3_00@
 HWCAP_HAS_VSX = @HWCAP_HAS_VSX@
 INSTALL = @INSTALL@
 INSTALL_DATA = @INSTALL_DATA@
@@ -423,7 +428,6 @@ pdfdir = @pdfdir@
 prefix = @prefix@
 program_transform_name = @program_transform_name@
 psdir = @psdir@
-runstatedir = @runstatedir@
 sbindir = @sbindir@
 sharedstatedir = @sharedstatedir@
 srcdir = @srcdir@
@@ -530,14 +534,14 @@ AM_CFLAGS_PSO_ARM64_LINUX = @FLAG_M64@ $(AM_CFLAGS_BASE) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_ARM64_LINUX = @FLAG_M64@ -g
 AM_FLAG_M3264_X86_DARWIN = -arch i386
 AM_CFLAGS_X86_DARWIN = $(WERROR) -arch i386 $(AM_CFLAGS_BASE) \
-				-mmacosx-version-min=10.5 \
+				-mmacosx-version-min=10.6 \
 				-fno-stack-protector -fno-pic -fno-PIC
 
 AM_CFLAGS_PSO_X86_DARWIN = $(AM_CFLAGS_X86_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_X86_DARWIN = -arch i386 -g
 AM_FLAG_M3264_AMD64_DARWIN = -arch x86_64
 AM_CFLAGS_AMD64_DARWIN = $(WERROR) -arch x86_64 $(AM_CFLAGS_BASE) \
-			    -mmacosx-version-min=10.5 -fno-stack-protector
+			    -mmacosx-version-min=10.6 -fno-stack-protector
 
 AM_CFLAGS_PSO_AMD64_DARWIN = $(AM_CFLAGS_AMD64_DARWIN) $(AM_CFLAGS_PSO_BASE)
 AM_CCASFLAGS_AMD64_DARWIN = -arch x86_64 -g

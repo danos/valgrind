@@ -1853,12 +1853,9 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    // Record the working directory at startup
    //   p: none
    VG_(debugLog)(1, "main", "Getting the working directory at startup\n");
-   { Bool ok = VG_(record_startup_wd)();
-     if (!ok) 
-        VG_(err_config_error)( "Can't establish current working "
-                               "directory at startup\n");
-   }
-   VG_(debugLog)(1, "main", "... %s\n", VG_(get_startup_wd)() );
+   VG_(record_startup_wd)();
+   const HChar *wd = VG_(get_startup_wd)();
+   VG_(debugLog)(1, "main", "... %s\n", wd != NULL ? wd : "<NO CWD>" );
 
    //============================================================
    // Command line argument handling order:
@@ -2169,36 +2166,10 @@ Int valgrind_main ( Int argc, HChar **argv, HChar **envp )
    /* Hook to delay things long enough so we can get the pid and
       attach GDB in another shell. */
    if (VG_(clo_wait_for_gdb)) {
-      ULong iters, q;
-      VG_(debugLog)(1, "main", "Wait for GDB\n");
-      VG_(printf)("pid=%d, entering delay loop\n", VG_(getpid)());
-
-#     if defined(VGP_x86_linux)
-      iters = 10;
-#     elif defined(VGP_amd64_linux) || defined(VGP_ppc64be_linux) \
-         || defined(VGP_ppc64le_linux) || defined(VGP_tilegx_linux)
-      iters = 10;
-#     elif defined(VGP_ppc32_linux)
-      iters = 5;
-#     elif defined(VGP_arm_linux)
-      iters = 5;
-#     elif defined(VGP_arm64_linux)
-      iters = 5;
-#     elif defined(VGP_s390x_linux)
-      iters = 10;
-#     elif defined(VGP_mips32_linux) || defined(VGP_mips64_linux)
-      iters = 10;
-#     elif defined(VGO_darwin)
-      iters = 3;
-#     elif defined(VGO_solaris)
-      iters = 10;
-#     else
-#       error "Unknown plat"
-#     endif
-
-      iters *= 1000ULL * 1000 * 1000;
-      for (q = 0; q < iters; q++) 
-         __asm__ __volatile__("" ::: "memory","cc");
+      const int ms = 8000; // milliseconds
+      VG_(debugLog)(1, "main", "Wait for GDB during %d ms\n", ms);
+      VG_(printf)("pid=%d, entering delay %d ms loop\n", VG_(getpid)(), ms);
+      VG_(poll)(NULL, 0, ms);
    }
 
    //--------------------------------------------------------------
@@ -2705,7 +2676,11 @@ void shutdown_actions_NORETURN( ThreadId tid,
       sys_exit, do likewise; if the (last) thread stopped due to a fatal
       signal, terminate the entire system with that same fatal signal. */
    VG_(debugLog)(1, "core_os", 
-                    "VG_(terminate_NORETURN)(tid=%u)\n", tid);
+                 "VG_(terminate_NORETURN)(tid=%u) schedretcode %s"
+                 " os_state.exit_code %ld fatalsig %d\n",
+                 tid, VG_(name_of_VgSchedReturnCode)(tids_schedretcode),
+                 VG_(threads)[tid].os_state.exitcode, 
+                 VG_(threads)[tid].os_state.fatalsig);
 
    switch (tids_schedretcode) {
    case VgSrc_ExitThread:  /* the normal way out (Linux, Solaris) */
@@ -3010,12 +2985,13 @@ asm("\n"
     "\tmovl  $vgPlain_interim_stack, %eax\n"
     "\taddl  $"VG_STRINGIFY(VG_STACK_GUARD_SZB)", %eax\n"
     "\taddl  $"VG_STRINGIFY(VG_DEFAULT_STACK_ACTIVE_SZB)", %eax\n"
+    /* allocate at least 16 bytes on the new stack, and aligned */
     "\tsubl  $16, %eax\n"
     "\tandl  $~15, %eax\n"
     /* install it, and collect the original one */
     "\txchgl %eax, %esp\n"
     /* call _start_in_C_linux, passing it the startup %esp */
-    "\tpushl %eax\n"
+    "\tmovl  %eax, (%esp)\n" 
     "\tcall  _start_in_C_linux\n"
     "\thlt\n"
     ".previous\n"
@@ -4078,6 +4054,19 @@ UWord voucher_mach_msg_set ( UWord arg1 );
 UWord voucher_mach_msg_set ( UWord arg1 )
 {
    return 0;
+}
+
+#endif
+
+#if defined(VGO_darwin) && DARWIN_VERS == DARWIN_10_10
+
+/* This might also be needed for > DARWIN_10_10, but I have no way
+   to test for that.  Hence '==' rather than '>=' in the version
+   test above. */
+void __bzero ( void* s, UWord n );
+void __bzero ( void* s, UWord n )
+{
+   (void) VG_(memset)( s, 0, n );
 }
 
 #endif

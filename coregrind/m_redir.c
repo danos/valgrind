@@ -1297,6 +1297,10 @@ static const HChar* complain_about_stripped_glibc_ldso[]
     "",
     "  On Debian, Ubuntu:                 libc6-dbg",
     "  On SuSE, openSuSE, Fedora, RHEL:   glibc-debuginfo",
+    "",
+    "Note that if you are debugging a 32 bit process on a",
+    "64 bit system, you will need a corresponding 32 bit debuginfo",
+    "package (e.g. libc6-dbg:i386).",
     NULL
   };
 
@@ -1820,6 +1824,8 @@ static void handle_require_text_symbols ( const DebugInfo* di )
    }
 
    /* All required specs were found.  Just free memory and return. */
+   for (i = 0; i < VG_(sizeXA)(fnpatts); i++)
+      VG_(free)(*(HChar**) VG_(indexXA)(fnpatts, i));
    VG_(deleteXA)(fnpatts);
 }
 

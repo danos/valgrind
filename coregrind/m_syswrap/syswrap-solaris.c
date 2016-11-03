@@ -3042,6 +3042,21 @@ PRE(sys_ioctl)
       break;
 
    /* mntio */
+   case VKI_MNTIOC_GETEXTMNTENT:
+      {
+         PRE_MEM_READ("ioctl(MNTIOC_GETEXTMNTENT)",
+                      ARG3, sizeof(struct vki_mntentbuf));
+
+         struct vki_mntentbuf *embuf = (struct vki_mntentbuf *) ARG3;
+         if (ML_(safe_to_deref(embuf, sizeof(*embuf)))) {
+            PRE_MEM_WRITE("ioctl(MNTIOC_GETEXTMNTENT, embuf->mbuf_emp)",
+                          (Addr) embuf->mbuf_emp, sizeof(struct vki_extmnttab));
+            PRE_MEM_WRITE("ioctl(MNTIOC_GETEXTMNTENT, embuf->mbuf_buf)",
+                          (Addr) embuf->mbuf_buf, embuf->mbuf_bufsize);
+         }
+      }
+      break;
+
    case VKI_MNTIOC_GETMNTANY:
       {
          PRE_MEM_READ("ioctl(MNTIOC_GETMNTANY)",
@@ -3050,13 +3065,11 @@ PRE(sys_ioctl)
          struct vki_mntentbuf *embuf = (struct vki_mntentbuf *) ARG3;
          if (ML_(safe_to_deref(embuf, sizeof(*embuf)))) {
             PRE_MEM_READ("ioctl(MNTIOC_GETMNTANY, embuf->mbuf_emp)",
-                         (Addr) embuf->mbuf_emp,
-                         sizeof(struct vki_mnttab));
+                         (Addr) embuf->mbuf_emp, sizeof(struct vki_mnttab));
             PRE_MEM_WRITE("ioctl(MNTIOC_GETMNTANY, embuf->mbuf_buf)",
-                          (Addr) embuf->mbuf_buf,
-                          embuf->mbuf_bufsize);
-            struct vki_mnttab *mnt
-               = (struct vki_mnttab *) embuf->mbuf_emp;
+                          (Addr) embuf->mbuf_buf, embuf->mbuf_bufsize);
+
+            struct vki_mnttab *mnt = (struct vki_mnttab *) embuf->mbuf_emp;
             if (ML_(safe_to_deref(mnt, sizeof(struct vki_mnttab)))) {
                if (mnt->mnt_special != NULL)
                   PRE_MEM_RASCIIZ("ioctl(MNTIOC_GETMNTANY, mnt->mnt_special)",
@@ -3331,6 +3344,32 @@ POST(sys_ioctl)
       break;
 
    /* mntio */
+   case VKI_MNTIOC_GETEXTMNTENT:
+      {
+         struct vki_mntentbuf *embuf = (struct vki_mntentbuf *) ARG3;
+         struct vki_extmnttab *mnt = (struct vki_extmnttab *) embuf->mbuf_emp;
+
+         POST_MEM_WRITE((Addr) mnt, sizeof(struct vki_extmnttab));
+         if (mnt != NULL) {
+            if (mnt->mnt_special != NULL)
+               POST_MEM_WRITE((Addr) mnt->mnt_special,
+                              VG_(strlen)(mnt->mnt_special) + 1);
+            if (mnt->mnt_mountp != NULL)
+               POST_MEM_WRITE((Addr) mnt->mnt_mountp,
+                              VG_(strlen)(mnt->mnt_mountp) + 1);
+            if (mnt->mnt_fstype != NULL)
+               POST_MEM_WRITE((Addr) mnt->mnt_fstype,
+                              VG_(strlen)(mnt->mnt_fstype) + 1);
+            if (mnt->mnt_mntopts != NULL)
+               POST_MEM_WRITE((Addr) mnt->mnt_mntopts,
+                              VG_(strlen)(mnt->mnt_mntopts) + 1);
+            if (mnt->mnt_time != NULL)
+               POST_MEM_WRITE((Addr) mnt->mnt_time,
+                              VG_(strlen)(mnt->mnt_time) + 1);
+         }
+      }
+      break;
+
    case VKI_MNTIOC_GETMNTANY:
       {
          struct vki_mntentbuf *embuf = (struct vki_mntentbuf *) ARG3;
@@ -6520,6 +6559,27 @@ PRE(sys_forksys)
       /* vfork */
       if (ARG1 == 2)
          VG_(close)(fds[1]);
+
+#     if defined(SOLARIS_PT_SUNDWTRACE_THRP)
+      /* Kernel can map a new page as a scratch space of the DTrace fasttrap
+         provider. There is no way we can directly get its address - it's all
+         private to the kernel. Fish it the slow way. */
+      Addr addr;
+      SizeT size;
+      UInt prot;
+      Bool found = VG_(am_search_for_new_segment)(&addr, &size, &prot);
+      if (found) {
+         VG_(debugLog)(1, "syswrap-solaris", "PRE(forksys), new segment: "
+                       "vaddr=%#lx, size=%#lx, prot=%#x\n", addr, size, prot);
+         vg_assert(prot == (VKI_PROT_READ | VKI_PROT_EXEC));
+         vg_assert(size == VKI_PAGE_SIZE);
+         ML_(notify_core_and_tool_of_mmap)(addr, size, prot, VKI_MAP_ANONYMOUS,
+                                           -1, 0);
+
+         /* Note: We don't notify the debuginfo reader about this mapping
+            because there is no debug information stored in this segment. */
+      }
+#     endif /* SOLARIS_PT_SUNDWTRACE_THRP */
    }
    else {
       VG_(do_atfork_parent)(tid);
@@ -9345,7 +9405,7 @@ POST(sys_door)
                                                  -1, 0);
 
                /* Note: We don't notify the debuginfo reader about this
-                  mapping because there are no debug information stored in
+                  mapping because there is no debug information stored in
                   this segment. */
             }
 
