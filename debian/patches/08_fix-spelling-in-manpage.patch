@@ -2,7 +2,7 @@ Description: Fix spelling-error-in-manpage found by lintian
 Origin: vendor
 Author: Alessandro Ghedini <ghedo@debian.org>
 Reviewed-by: Alessandro Ghedini <ghedo@debian.org>
-Last-Update: 2013-11-04
+Last-Update: 2016-11-03
 
 --- a/drd/docs/drd-manual.xml
 +++ b/drd/docs/drd-manual.xml
@@ -73,3 +73,14 @@ Last-Update: 2013-11-04
              tested with various glibc versions (e.g. 2.11, 2.16, 2.18)
              on various platforms.</para>
          </listitem>
+--- a/docs/valgrind.1
++++ b/docs/valgrind.1
+@@ -1725,7 +1725,7 @@
+ callgrind_control \-i on\&.
+ .sp
+ Note that the resulting call graph will most probably not contain
+-\fBmain\fR, but will contain all the functions executed after instrumentation was enabled\&. Instrumentation can also programatically enabled/disabled\&. See the Callgrind include file
++\fBmain\fR, but will contain all the functions executed after instrumentation was enabled\&. Instrumentation can also programmatically enabled/disabled\&. See the Callgrind include file
+ callgrind\&.h
+ for the macro you have to use in your source code\&.
+ .sp

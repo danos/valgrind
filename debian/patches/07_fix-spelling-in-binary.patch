@@ -27,7 +27,7 @@ Last-Update: 2015-09-25
     case  1: /* v.set */
 --- a/VEX/priv/ir_defs.c
 +++ b/VEX/priv/ir_defs.c
-@@ -4478,7 +4478,7 @@
+@@ -4564,7 +4564,7 @@
     if (bb->stmts_used < 0 || bb->stmts_size < 8
         || bb->stmts_used > bb->stmts_size)
        /* this BB is so strange we can't even print it */
@@ -60,7 +60,7 @@ Last-Update: 2015-09-25
                  " N-plicated elts\n");
 --- a/coregrind/m_scheduler/scheduler.c
 +++ b/coregrind/m_scheduler/scheduler.c
-@@ -2138,7 +2138,7 @@
+@@ -2133,7 +2133,7 @@
        "to recompile such code, using the header files from this version of\n"
        "Valgrind, and not any previous version.\n"
        "\n"
