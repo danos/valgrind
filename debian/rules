@@ -8,10 +8,6 @@ CFLAGS  += $(shell dpkg-buildflags --get CPPFLAGS)
 CFLAGS  += "-I/usr/include/$(DEB_HOST_GNU_TYPE)"   # fixes #676029
 LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS)
 
-ifneq (,$(filter $(DEB_HOST_ARCH), mips mipsel))
-	CFLAGS += -mips2 # fixes 710307, #777666
-endif
-
 %:
 	dh $@ --parallel --with=autoreconf
 
