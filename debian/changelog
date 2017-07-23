@@ -1,3 +1,12 @@
+valgrind (1:3.13.0-1) UNRELEASED; urgency=medium
+
+  * New upstream release
+    - Fix segfaults on MIPS Cavium Octeon boards (Closes: #854194)
+    - Support compressed debuginfo sections (Closes: #677876)
+  * Update watch file to point to new download site
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Sun, 23 Jul 2017 23:31:43 +0100
+
 valgrind (1:3.12.0-1.1) unstable; urgency=medium
 
   * Non-maintainer upload.
