@@ -2,7 +2,6 @@ Source: valgrind
 Section: devel
 Priority: optional
 Maintainer: Alessandro Ghedini <ghedo@debian.org>
-Uploaders: Roland Stigge <stigge@debian.org>
 Build-Depends: debhelper (>= 7.0.50~),
  dh-autoreconf,
  gdb,
