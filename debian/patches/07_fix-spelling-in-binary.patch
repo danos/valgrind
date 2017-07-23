@@ -5,15 +5,15 @@ Last-Update: 2015-09-25
 
 --- a/coregrind/m_commandline.c
 +++ b/coregrind/m_commandline.c
-@@ -69,7 +69,7 @@
-    fd = VG_(open)(filename, 0, VKI_S_IRUSR);
+@@ -68,7 +68,7 @@
     if ( !sr_isError(fd) ) {
        Int res = VG_(fstat)( sr_Res(fd), &stat_buf );
--      // Ignore if not owned by current user or world writeable (CVE-2008-4865)
-+      // Ignore if not owned by current user or world writable (CVE-2008-4865)
-       if (!res && stat_buf.uid == VG_(geteuid)()
-           && (!(stat_buf.mode & VKI_S_IWOTH))) {
-          if ( stat_buf.size > 0 ) {
+       /* Ignore if not owned by the current user, or is not a regular file,
+-         or is world writeable (CVE-2008-4865). */
++         or is world writable (CVE-2008-4865). */
+       if (res == 0
+           && stat_buf.uid == VG_(geteuid)()
+           && VKI_S_ISREG(stat_buf.mode)
 --- a/coregrind/m_gdbserver/server.c
 +++ b/coregrind/m_gdbserver/server.c
 @@ -254,7 +254,7 @@
@@ -27,7 +27,7 @@ Last-Update: 2015-09-25
     case  1: /* v.set */
 --- a/VEX/priv/ir_defs.c
 +++ b/VEX/priv/ir_defs.c
-@@ -4564,7 +4564,7 @@
+@@ -4643,7 +4643,7 @@
     if (bb->stmts_used < 0 || bb->stmts_size < 8
         || bb->stmts_used > bb->stmts_size)
        /* this BB is so strange we can't even print it */
@@ -38,7 +38,7 @@ Last-Update: 2015-09-25
     for (i = 0; i < n_temps; i++) {
 --- a/gdbserver_tests/mchelp.stdoutB.exp
 +++ b/gdbserver_tests/mchelp.stdoutB.exp
-@@ -80,7 +80,7 @@
+@@ -83,7 +83,7 @@
      Valgrind internal host status/memory
    v.translate <addr> [<traceflags>]  : debug translation of <addr> with <traceflags>
      (default traceflags 0b00100000 : show after instrumentation)
@@ -60,7 +60,7 @@ Last-Update: 2015-09-25
                  " N-plicated elts\n");
 --- a/coregrind/m_scheduler/scheduler.c
 +++ b/coregrind/m_scheduler/scheduler.c
-@@ -2133,7 +2133,7 @@
+@@ -2147,7 +2147,7 @@
        "to recompile such code, using the header files from this version of\n"
        "Valgrind, and not any previous version.\n"
        "\n"
@@ -69,3 +69,14 @@ Last-Update: 2015-09-25
        "a bug in Valgrind.  In this case, please file a bug report at\n"
        "\n"
        "   http://www.valgrind.org/support/bug_reports.html\n"
+--- a/coregrind/m_xtree.c
++++ b/coregrind/m_xtree.c
+@@ -946,7 +946,7 @@
+       FP("n%u: %llu %s\n", n_groups, top_total, header->top_node_desc);
+ 
+       /* Output depth 0 groups. */
+-      DMSG(1, "XT_massif_print outputing %u depth 0 groups\n", n_groups);
++      DMSG(1, "XT_massif_print outputting %u depth 0 groups\n", n_groups);
+       for (i = 0; i < n_groups; i++)
+          ms_output_group(fp, 0, &groups[i], sig_sz, header->sig_threshold);
+ 
