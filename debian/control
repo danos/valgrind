@@ -13,7 +13,7 @@ Build-Depends: debhelper (>= 7.0.50~),
  docbook-xsl,
  docbook-xml,
  xsltproc
-Standards-Version: 3.9.8
+Standards-Version: 4.0.0
 Vcs-Browser: https://anonscm.debian.org/cgit/collab-maint/valgrind.git
 Vcs-Git: https://anonscm.debian.org/git/collab-maint/valgrind.git
 Homepage: http://www.valgrind.org/
