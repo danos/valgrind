@@ -1,0 +1,23 @@
+From 34dd8493de39314033509bb7ad62673f33dcf3db Mon Sep 17 00:00:00 2001
+From: Ivo Raisr <ivosh@ivosh.net>
+Date: Thu, 3 Aug 2017 05:22:01 +0000
+Subject: [PATCH] Fix handling command line option --xml-socket. Fixes
+ BZ#382998 Patch by: Orgad Shaneh <orgads@gmail.com>
+
+git-svn-id: svn://svn.valgrind.org/valgrind/trunk@16467
+---
+ NEWS                    | 1 +
+ coregrind/m_libcprint.c | 2 +-
+ 2 files changed, 2 insertions(+), 1 deletion(-)
+
+--- a/coregrind/m_libcprint.c
++++ b/coregrind/m_libcprint.c
+@@ -526,7 +526,7 @@
+          break;
+ 
+       case VgLogTo_Socket:
+-         log_fd = prepare_sink_socket(VG_(clo_xml_fname_unexpanded),
++         xml_fd = prepare_sink_socket(VG_(clo_xml_fname_unexpanded),
+                                       &VG_(xml_output_sink), True);
+          break;
+    }
