@@ -3,6 +3,8 @@
 # valgrind uses -fno-stack-protector
 export DEB_BUILD_MAINT_OPTIONS := hardening=-stackprotector,-stackprotectorstrong
 
+include /usr/share/dpkg/architecture.mk
+
 CFLAGS   = $(shell dpkg-buildflags --get CFLAGS)
 CFLAGS  += $(shell dpkg-buildflags --get CPPFLAGS)
 CFLAGS  += "-I/usr/include/$(DEB_HOST_GNU_TYPE)"   # fixes #676029
@@ -36,6 +38,9 @@ override_dh_install:
 	# valgrind script
 	mv -f $(target)/usr/bin/valgrind $(target)/usr/bin/valgrind.bin
 	mv -f ${target}/usr/bin/valgrind.sh $(target)/usr/bin/valgrind
+	# multiarchify pkg-config
+	mkdir -p ${target}/usr/lib/$(DEB_HOST_MULTIARCH)
+	mv -f $(target)/usr/lib/pkgconfig $(target)/usr/lib/$(DEB_HOST_MULTIARCH)/pkgconfig
 
 override_dh_installchangelogs:
 	dh_installchangelogs NEWS
