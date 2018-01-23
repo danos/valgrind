@@ -5,3 +5,4 @@
 08_fix-spelling-in-manpage.patch
 09_fix-armhf-detect.patch
 10_fix-handling-command-line-option-xml-socket.patch
+11_epoll_pwait-can-have-a-NULL-sigmask.patch

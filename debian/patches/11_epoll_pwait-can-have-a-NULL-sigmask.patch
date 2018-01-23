@@ -1,0 +1,68 @@
+From 3ac87cf9277964802ddd9af9747a10ff0b838c29 Mon Sep 17 00:00:00 2001
+From: Mark Wielaard <mark@klomp.org>
+Date: Sat, 17 Jun 2017 13:49:22 +0000
+Subject: [PATCH] epoll_pwait can have a NULL sigmask.
+
+According to the epoll_pwait(2) man page:
+
+       The  sigmask  argument  may  be  specified  as  NULL,  in  which  case
+       epoll_pwait() is equivalent to epoll_wait().
+
+But doing that under valgrind gives:
+
+==13887== Syscall param epoll_pwait(sigmask) points to unaddressable byte(s)
+==13887==    at 0x4F2B940: epoll_pwait (epoll_pwait.c:43)
+==13887==    by 0x400ADE: main (syscalls-2007.c:89)
+==13887==  Address 0x0 is not stack'd, malloc'd or (recently) free'd
+
+This is because the sys_epoll_pwait wrapper has:
+
+   if (ARG4)
+      PRE_MEM_READ( "epoll_pwait(sigmask)", ARG5, sizeof(vki_sigset_t) );
+
+Which looks like a typo (ARG4 is timeout and ARG5 is sigmask).
+
+This shows up with newer glibc which translates an epoll_wait call into
+an epoll_pwait call with NULL sigmask.
+
+Fix typo and add a testcase.
+
+https://bugs.kde.org/show_bug.cgi?id=381289
+
+git-svn-id: svn://svn.valgrind.org/valgrind/trunk@16451
+---
+ NEWS                                 |  1 +
+ coregrind/m_syswrap/syswrap-linux.c  |  2 +-
+ memcheck/tests/linux/syscalls-2007.c | 11 +++++++++++
+ 3 files changed, 13 insertions(+), 1 deletion(-)
+
+--- a/coregrind/m_syswrap/syswrap-linux.c
++++ b/coregrind/m_syswrap/syswrap-linux.c
+@@ -1901,7 +1901,7 @@
+                  int, maxevents, int, timeout, vki_sigset_t *, sigmask,
+                  vki_size_t, sigsetsize);
+    PRE_MEM_WRITE( "epoll_pwait(events)", ARG2, sizeof(struct vki_epoll_event)*ARG3);
+-   if (ARG4)
++   if (ARG5)
+       PRE_MEM_READ( "epoll_pwait(sigmask)", ARG5, sizeof(vki_sigset_t) );
+ }
+ POST(sys_epoll_pwait)
+--- a/memcheck/tests/linux/syscalls-2007.c
++++ b/memcheck/tests/linux/syscalls-2007.c
+@@ -79,5 +79,16 @@
+   }
+ #endif
+ 
++#if defined(HAVE_EPOLL_CREATE) && defined(HAVE_EPOLL_PWAIT)
++  {
++    int fd3;
++    struct epoll_event evs[10];
++
++    fd3 = epoll_create (10);
++    /* epoll_pwait can take a NULL sigmask. */
++    epoll_pwait (fd3, evs, 10, 1, NULL);
++  }
++#endif
++
+   return 0;
+ }
