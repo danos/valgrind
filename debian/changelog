@@ -1,3 +1,17 @@
+valgrind (1:3.13.0-2) unstable; urgency=medium
+
+  * Fix handling command line option --xml-socket (Closes: #870419)
+  * Fix handling of epoll_pwait with a NULL sigmask (Closes: #886364)
+  * Set valgrind-dbg Priority to optional as per new policy
+  * Bump Standards-Version to 4.1.3 (no changes needed)
+  * Point Vcs-* to salsa.d.o
+  * Fix insecure-copyright-format-uri
+  * Fix unnecessary-testsuite-autopkgtest-header
+  * Install pkg-config file to multi-arch location.
+    Thanks to Helmut Grohne for the patch (Closes: #885003)
+
+ -- Alessandro Ghedini <ghedo@debian.org>  Tue, 23 Jan 2018 23:09:13 +0000
+
 valgrind (1:3.13.0-1) unstable; urgency=medium
 
   * New upstream release
