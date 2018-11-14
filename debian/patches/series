@@ -4,6 +4,3 @@
 07_fix-spelling-in-binary.patch
 08_fix-spelling-in-manpage.patch
 09_fix-armhf-detect.patch
-10_fix-handling-command-line-option-xml-socket.patch
-11_epoll_pwait-can-have-a-NULL-sigmask.patch
-12_Accept-read-only-PT_LOAD-segments-and-.rodata.patch
