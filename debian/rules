@@ -11,7 +11,7 @@ CFLAGS  += "-I/usr/include/$(DEB_HOST_GNU_TYPE)"   # fixes #676029
 LDFLAGS  = $(shell dpkg-buildflags --get LDFLAGS)
 
 %:
-	dh $@ --parallel --with=autoreconf
+	dh $@ --with=autoreconf
 
 override_dh_auto_configure:
 	dh_auto_configure -- --enable-tls CFLAGS="$(CFLAGS)" LDFLAGS="$(LDFLAGS)"
@@ -20,7 +20,7 @@ override_dh_auto_test:
 	: # do nothing for now
 
 override_dh_auto_build:
-	dh_auto_build --parallel
+	dh_auto_build
 	$(MAKE) -C docs FAQ.txt
 	$(MAKE) -C docs html-docs
 	$(MAKE) -C docs man-pages
