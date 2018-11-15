@@ -1,9 +1,16 @@
-valgrind (1:3.14.0-1) UNRELEASED; urgency=medium
+valgrind (1:3.14.0-1) unstable; urgency=medium
 
   * New upstream release (Closes: #913208)
     + Fix assertion `cfsi_fits` failing in simple C program (Closes: #909797)
+  * Drop patches backported from upstream
+  * Refresh patches
+  * Bump Standards-Version to 4.2.1 (no changes needed)
+  * Bump debhelper compat level to 11
+  * Update install paths
+  * Use pkg-config to detect MPI to fix cross-build.
+    Thanks to Helmut Grohne for the patch (Closes: #902297)
 
- -- Alessandro Ghedini <ghedo@debian.org>  Wed, 14 Nov 2018 21:25:03 +0000
+ -- Alessandro Ghedini <ghedo@debian.org>  Thu, 15 Nov 2018 00:21:43 +0000
 
 valgrind (1:3.13.0-2.1) unstable; urgency=high
 
