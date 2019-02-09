@@ -31,6 +31,9 @@ override_dh_shlibdeps:
 override_dh_strip:
 	dh_strip --dbg-package=valgrind-dbg
 
+override_dh_dwz:
+	: # do nothing for now
+
 target=$(CURDIR)/debian/valgrind
 override_dh_install:
 	dh_install -pvalgrind -Xlibmpiwrap
