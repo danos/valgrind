@@ -2,7 +2,7 @@ Source: valgrind
 Section: devel
 Priority: optional
 Maintainer: Alessandro Ghedini <ghedo@debian.org>
-Build-Depends: debhelper (>= 11),
+Build-Depends: debhelper (>= 12),
  gdb,
  gcc-multilib [amd64],
  libc6-dev-i386 [amd64],
