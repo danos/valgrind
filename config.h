@@ -336,7 +336,7 @@
 #define PACKAGE_NAME "Valgrind"
 
 /* Define to the full name and version of this package. */
-#define PACKAGE_STRING "Valgrind 3.14.0"
+#define PACKAGE_STRING "Valgrind 3.15.0"
 
 /* Define to the one symbol short name of this package. */
 #define PACKAGE_TARNAME "valgrind"
@@ -345,7 +345,7 @@
 #define PACKAGE_URL ""
 
 /* Define to the version of this package. */
-#define PACKAGE_VERSION "3.14.0"
+#define PACKAGE_VERSION "3.15.0"
 
 /* Define to 1 if you have the `A_GETSTAT' and `A_SETSTAT' constants. */
 /* #undef SOLARIS_AUDITON_STAT */
@@ -459,7 +459,7 @@
 #define TIME_WITH_SYS_TIME 1
 
 /* Version number of package */
-#define VERSION "3.14.0"
+#define VERSION "3.15.0"
 
 /* Temporary files directory */
 #define VG_TMPDIR "/tmp"
