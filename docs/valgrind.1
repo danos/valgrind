@@ -1,13 +1,13 @@
 '\" t
 .\"     Title: VALGRIND
 .\"    Author: [see the "Author" section]
-.\" Generator: DocBook XSL Stylesheets vsnapshot <http://docbook.sf.net/>
-.\"      Date: 10/09/2018
-.\"    Manual: Release 3.14.0
-.\"    Source: Release 3.14.0
+.\" Generator: DocBook XSL Stylesheets v1.79.1 <http://docbook.sf.net/>
+.\"      Date: 04/13/2019
+.\"    Manual: Release 3.15.0
+.\"    Source: Release 3.15.0
 .\"  Language: English
 .\"
-.TH "VALGRIND" "1" "10/09/2018" "Release 3.14.0" "Release 3.14.0"
+.TH "VALGRIND" "1" "04/13/2019" "Release 3.15.0" "Release 3.15.0"
 .\" -----------------------------------------------------------------
 .\" * Define some portability stuff
 .\" -----------------------------------------------------------------
@@ -49,7 +49,7 @@ The single most important option\&.
 \fB\-\-tool=<toolname> [default: memcheck] \fR
 .RS 4
 Run the Valgrind tool called
-\fItoolname\fR, e\&.g\&. memcheck, cachegrind, callgrind, helgrind, drd, massif, lackey, none, exp\-sgcheck, exp\-bbv, exp\-dhat, etc\&.
+\fItoolname\fR, e\&.g\&. memcheck, cachegrind, callgrind, helgrind, drd, massif, dhat, lackey, none, exp\-sgcheck, exp\-bbv, etc\&.
 .RE
 .SH "BASIC OPTIONS"
 .PP
@@ -412,6 +412,23 @@ instructs to output a line containing the
 Such marker lines facilitate searching for errors and/or extracting errors in an output file that contain valgrind errors mixed with the program output\&.
 .sp
 Note that empty markers are accepted\&. So, only using a begin (or an end) marker is possible\&.
+.RE
+.PP
+\fB\-\-show\-error\-list=no|yes [default: no]\fR
+.RS 4
+If this option is enabled, for tools that report errors, valgrind will show the list of detected errors and the list of used suppressions at exit\&.
+.sp
+Note that at verbosity 2 and above, valgrind automatically shows the list of detected errors and the list of used suppressions at exit, unless
+\fB\-\-show\-error\-list=no\fR
+is selected\&.
+.RE
+.PP
+\fB\-s\fR
+.RS 4
+Specifying
+\fB\-s\fR
+is equivalent to
+\fB\-\-show\-error\-list=yes\fR\&.
 .RE
 .PP
 \fB\-\-sigill\-diagnostics=<yes|no> [default: yes] \fR
@@ -801,7 +818,7 @@ takes advantage of this observation, limiting the overhead of checking to code w
 .PP
 \fB\-\-read\-inline\-info=<yes|no> [default: see below] \fR
 .RS 4
-When enabled, Valgrind will read information about inlined function calls from DWARF3 debug info\&. This slows Valgrind startup and makes it use more memory (typically for each inlined piece of code, 6 words and space for the function name), but it results in more descriptive stacktraces\&. For the 3\&.10\&.0 release, this functionality is enabled by default only for Linux, Android and Solaris targets and only for the tools Memcheck, Helgrind and DRD\&. Here is an example of some stacktraces with
+When enabled, Valgrind will read information about inlined function calls from DWARF3 debug info\&. This slows Valgrind startup and makes it use more memory (typically for each inlined piece of code, 6 words and space for the function name), but it results in more descriptive stacktraces\&. Currently, this functionality is enabled by default only for Linux, Android and Solaris targets and only for the tools Memcheck, Massif, Helgrind and DRD\&. Here is an example of some stacktraces with
 \fB\-\-read\-inline\-info=no\fR:
 .sp
 .if n \{\
@@ -1265,7 +1282,7 @@ on linux)\&. By default, no replacement is done for a statically linked binary o
 to specify one additional synonym pattern, giving flexibility in the replacement\&. Or to prevent interception of all public allocation symbols\&.
 .sp
 Currently, this flexibility is only allowed for the malloc related functions, using the synonym
-\fIsomalloc\fR\&. This synonym is usable for all tools doing standard replacement of malloc related functions (e\&.g\&. memcheck, massif, drd, helgrind, exp\-dhat, exp\-sgcheck)\&.
+\fIsomalloc\fR\&. This synonym is usable for all tools doing standard replacement of malloc related functions (e\&.g\&. memcheck, helgrind, drd, massif, dhat, exp\-sgcheck)\&.
 .sp
 .RS 4
 .ie n \{\
@@ -1702,8 +1719,10 @@ is specified\&.
 .PP
 \fB\-\-xtree\-leak=<no|yes> [no] \fR
 .RS 4
-If set to yes, the results for the leak search done at exit will be output in a \*(AqCallgrind Format\*(Aq execution tree file\&. Note that this automatically sets the option
-\fB\-\-leak\-check=full\fR\&. The produced file will contain the following events:
+If set to yes, the results for the leak search done at exit will be output in a \*(AqCallgrind Format\*(Aq execution tree file\&. Note that this automatically sets the options
+\fB\-\-leak\-check=full\fR
+and
+\fB\-\-show\-leak\-kinds=all\fR, to allow xtree visualisation tools such as kcachegrind to select what kind to leak to visualise\&. The produced file will contain the following events:
 .sp
 .RS 4
 .ie n \{\

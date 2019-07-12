@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>4. README</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="dist.html" title="Valgrind Distribution Documents">
 <link rel="prev" href="dist.news.old.html" title="3. OLDER NEWS">
@@ -60,6 +60,7 @@ platforms: <br>
 - PPC32/Linux<br>
 - PPC64/Linux<br>
 - ARM/Linux<br>
+- ARM64/Linux<br>
 - x86/macOS<br>
 - AMD64/macOS<br>
 - S390X/Linux<br>
@@ -90,7 +91,9 @@ Building and installing it<br>
 ~~~~~~~~~~~~~~~~~~~~~~~~~~<br>
 To install from the GIT repository:<br>
 <br>
-  0. Clone the code from GIT, following the instructions at<br>
+  0. Clone the code from GIT:<br>
+     git clone git://sourceware.org/git/valgrind.git<br>
+     There are further instructions at<br>
      http://www.valgrind.org/downloads/repository.html.<br>
 <br>
   1. cd into the source directory.<br>
@@ -112,7 +115,7 @@ To install from a tar.bz2 distribution:<br>
 <br>
   7. See if it works.  Try "valgrind ls -l".  Either this works, or it<br>
      bombs out with some complaint.  In that case, please let us know<br>
-     (see www.valgrind.org).<br>
+     (see http://valgrind.org/support/bug_reports.html).<br>
 <br>
 Important!  Do not move the valgrind installation into a place<br>
 different from that specified by --prefix at build time.  This will<br>

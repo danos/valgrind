@@ -3,7 +3,7 @@
 <meta http-equiv="Content-Type" content="text/html; charset=ISO-8859-1">
 <title>5. Cachegrind: a cache and branch-prediction profiler</title>
 <link rel="stylesheet" type="text/css" href="vg_basic.css">
-<meta name="generator" content="DocBook XSL Stylesheets Vsnapshot">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
 <link rel="home" href="index.html" title="Valgrind Documentation">
 <link rel="up" href="manual.html" title="Valgrind User Manual">
 <link rel="prev" href="mc-manual.html" title="4. Memcheck: a memory error detector">
@@ -757,6 +757,12 @@ small differences like these;  it works in the same way as
       write misses, use this option:</p>
 <p><code class="option">--sort=DLmr:1,DLmw:1</code></p>
 </dd>
+<dt><span class="term">
+      <code class="option">--show-percs=&lt;no|yes&gt; [default: no] </code>
+    </span></dt>
+<dd><p>When enabled, a percentage is printed next to all event counts.
+      This helps gauge the relative importance of each function and line.
+      </p></dd>
 <dt><span class="term">
       <code class="option">--auto=&lt;no|yes&gt; [default: no] </code>
     </span></dt>
