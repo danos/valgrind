@@ -57,7 +57,7 @@ Files: lackey/*
 Copyright: 2002-2012, Nicholas Nethercote
 License: GPL-2.0+
 
-Files: exp-dhat/*
+Files: dhat/*
 Copyright: 2010-2012, Mozilla Inc.
 License: GPL-2.0+
 
