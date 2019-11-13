@@ -1,0 +1,37 @@
+From: Luca Boccassi <DL-vyatta-help@att.com>
+Date: Thu, 5 Nov 2015 11:44:44 +0000
+Subject: Add alignment to exp-dhat renew_block function
+
+---
+ exp-dhat/dh_main.c | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+--- a/exp-dhat/dh_main.c
++++ b/exp-dhat/dh_main.c
+@@ -535,7 +535,7 @@
+ 
+ 
+ static
+-void* renew_block ( ThreadId tid, void* p_old, SizeT new_req_szB )
++void* renew_block ( ThreadId tid, void* p_old, SizeT new_req_szB, SizeT align )
+ {
+    if (0) VG_(printf)("REALL %p %lu\n", p_old, new_req_szB);
+    void* p_new = NULL;
+@@ -576,7 +576,7 @@
+    } else {
+ 
+       // New size is bigger;  make new block, copy shared contents, free old.
+-      p_new = VG_(cli_malloc)(VG_(clo_alignment), new_req_szB);
++      p_new = VG_(cli_malloc)(align, new_req_szB);
+       if (!p_new) {
+          // Nb: if realloc fails, NULL is returned but the old block is not
+          // touched.  What an awful function.
+@@ -666,7 +666,7 @@
+       dh_free(tid, p_old);
+       return NULL;
+    }
+-   return renew_block(tid, p_old, new_szB);
++   return renew_block(tid, p_old, new_szB, VG_(clo_alignment));
+ }
+ 
+ static SizeT dh_malloc_usable_size ( ThreadId tid, void* p )

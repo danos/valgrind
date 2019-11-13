@@ -4,3 +4,12 @@
 07_fix-spelling-in-binary.patch
 08_fix-spelling-in-manpage.patch
 09_fix-armhf-detect.patch
+15-Add-VALGRIND_NON_SIMD_CALL4-define.patch
+16-Add-VALGRIND_NON_SIMD_CALL5-define.patch
+17-Refactor-drd_realloc-to-support-alignment.patch
+18-Add-alignment-to-exp-dhat-renew_block-function.patch
+19-Refactor-h_replace_realloc-to-support-alignment.patch
+20-Refactor-hg_cli__realloc-to-support-alignment.patch
+21-Refactor-massif-realloc_block-to-support-alignment.patch
+22-Refactor-MC_-realloc-to-support-alignment.patch
+23-Add-support-for-DPDK-rte_-alloc-family.patch

@@ -1,0 +1,56 @@
+From: Luca Boccassi <DL-vyatta-help@att.com>
+Date: Tue, 3 Nov 2015 15:51:22 +0000
+Subject: Add VALGRIND_NON_SIMD_CALL4 define
+
+Needed when hijacking a function call with 4 parameters, like the
+DPDK rte_*alloc family of functions.
+---
+ coregrind/m_scheduler/scheduler.c |  9 +++++++++
+ include/valgrind.h                | 11 ++++++++++-
+ 2 files changed, 19 insertions(+), 1 deletion(-)
+
+--- a/coregrind/m_scheduler/scheduler.c
++++ b/coregrind/m_scheduler/scheduler.c
+@@ -1882,6 +1882,15 @@ void do_client_request ( ThreadId tid )
+ 	    SET_CLCALL_RETVAL(tid, f ( tid, arg[2], arg[3], arg[4] ), (Addr)f );
+          break;
+       }
++      case VG_USERREQ__CLIENT_CALL4: {
++         UWord (*f)(ThreadId, UWord, UWord, UWord, UWord) = (void*)arg[1];
++     if (f == NULL)
++        VG_(message)(Vg_DebugMsg, "VG_USERREQ__CLIENT_CALL4: func=%p\n", f);
++     else
++        SET_CLCALL_RETVAL(tid, f ( tid, arg[2], arg[3], arg[4], arg[5] ),
++                (Addr)f );
++         break;
++      }
+ 
+       // Nb: this looks like a circular definition, because it kind of is.
+       // See comment in valgrind.h to understand what's going on.
+--- a/include/valgrind.h
++++ b/include/valgrind.h
+@@ -6195,7 +6195,8 @@ typedef
+           VG_USERREQ__VEX_INIT_FOR_IRI = 0x1901,
+           /* Used by Inner Valgrind to inform Outer Valgrind where to
+              find the list of inner guest threads */
+-          VG_USERREQ__INNER_THREADS    = 0x1902
++          VG_USERREQ__INNER_THREADS    = 0x1902,
++          VG_USERREQ__CLIENT_CALL4     = 0x1105
+    } Vg_ClientRequest;
+ 
+ #if !defined(__GNUC__)
+@@ -6360,6 +6361,14 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+                                     _qyy_arg1, _qyy_arg2,               \
+                                     _qyy_arg3, 0)
+ 
++#define VALGRIND_NON_SIMD_CALL4(_qyy_fn, _qyy_arg1, _qyy_arg2, _qyy_arg3, \
++        _qyy_arg4) \
++    VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,             \
++                                    VG_USERREQ__CLIENT_CALL4,           \
++                                    _qyy_fn,                            \
++                                    _qyy_arg1, _qyy_arg2,               \
++                                    _qyy_arg3, _qyy_arg4)
++
+ 
+ /* Counts the number of errors that have been recorded by a tool.  Nb:
+    the tool must record the errors with VG_(maybe_record_error)() or

@@ -1,0 +1,175 @@
+From: Luca Boccassi <DL-vyatta-help@att.com>
+Date: Thu, 5 Nov 2015 11:43:41 +0000
+Subject: Refactor drd_realloc to support alignment
+
+Add static helper renew_block that takes an alignment parameter
+---
+ drd/drd_malloc_wrappers.c | 146 ++++++++++++++++++++++++----------------------
+ 1 file changed, 76 insertions(+), 70 deletions(-)
+
+--- a/drd/drd_malloc_wrappers.c
++++ b/drd/drd_malloc_wrappers.c
+@@ -115,78 +115,19 @@
+    tl_assert(success);
+ }
+ 
+-/**
+- * Remove the information that was stored by DRD_(malloclike_block)() about
+- * a memory block.
+- */
+-Bool DRD_(freelike_block)(const ThreadId tid, const Addr p, const Bool dealloc)
+-{
+-   DRD_Chunk* mc;
+-
+-   tl_assert(p);
+-
+-   s_cmalloc_n_frees++;
+-
+-   mc = VG_(HT_lookup)(s_malloc_list, (UWord)p);
+-   if (mc)
+-   {
+-      tl_assert(p == mc->data);
+-      if (mc->size > 0)
+-         s_stop_using_mem_callback(mc->data, mc->size);
+-      if (dealloc)
+-	 VG_(cli_free)((void*)p);
+-      VG_(HT_remove)(s_malloc_list, (UWord)p);
+-      VG_(free)(mc);
+-      return True;
+-   }
+-   return False;
+-}
+-
+-/** Wrapper for malloc(). */
+-static void* drd_malloc(ThreadId tid, SizeT n)
+-{
+-   return new_block(tid, n, VG_(clo_alignment), /*is_zeroed*/False);
+-}
+-
+-/** Wrapper for memalign(). */
+-static void* drd_memalign(ThreadId tid, SizeT align, SizeT n)
+-{
+-   return new_block(tid, n, align, /*is_zeroed*/False);
+-}
+-
+-/** Wrapper for calloc(). */
+-static void* drd_calloc(ThreadId tid, SizeT nmemb, SizeT size1)
+-{
+-   return new_block(tid, nmemb*size1, VG_(clo_alignment),
+-                          /*is_zeroed*/True);
+-}
+-
+-/** Wrapper for free(). */
+-static void drd_free(ThreadId tid, void* p)
+-{
+-   handle_free(tid, p);
+-}
+-
+-/**
+- * Wrapper for realloc(). Returns a pointer to the new block of memory, or
+- * NULL if no new block could not be allocated. Notes:
+- * - realloc(NULL, size) has the same effect as malloc(size).
+- * - realloc(p, 0) has the same effect as free(p).
+- * - success is not guaranteed even if the requested size is smaller than the
+- *   allocated size.
+-*/
+-static void* drd_realloc(ThreadId tid, void* p_old, SizeT new_size)
++/** Helper function for realloc, to support alignment. */
++static void* renew_block(ThreadId tid, void* p_old, SizeT new_size, SizeT align)
+ {
+    DRD_Chunk* mc;
+    void*      p_new;
+    SizeT      old_size;
+ 
+    if (! p_old)
+-      return drd_malloc(tid, new_size);
++      return new_block(tid, new_size, align, /*is_zeroed*/False);
+ 
+    if (new_size == 0)
+    {
+-      drd_free(tid, p_old);
++      handle_free(tid, p_old);
+       return NULL;
+    }
+ 
+@@ -220,7 +161,7 @@
+    else
+    {
+       /* new size is bigger */
+-      p_new = VG_(cli_malloc)(VG_(clo_alignment), new_size);
++      p_new = VG_(cli_malloc)(align, new_size);
+ 
+       if (p_new)
+       {
+@@ -249,6 +190,71 @@
+    return p_new;
+ }
+ 
++/**
++ * Remove the information that was stored by DRD_(malloclike_block)() about
++ * a memory block.
++ */
++Bool DRD_(freelike_block)(const ThreadId tid, const Addr p, const Bool dealloc)
++{
++   DRD_Chunk* mc;
++
++   tl_assert(p);
++
++   s_cmalloc_n_frees++;
++
++   mc = VG_(HT_lookup)(s_malloc_list, (UWord)p);
++   if (mc)
++   {
++      tl_assert(p == mc->data);
++      if (mc->size > 0)
++         s_stop_using_mem_callback(mc->data, mc->size);
++      if (dealloc)
++	 VG_(cli_free)((void*)p);
++      VG_(HT_remove)(s_malloc_list, (UWord)p);
++      VG_(free)(mc);
++      return True;
++   }
++   return False;
++}
++
++/** Wrapper for malloc(). */
++static void* drd_malloc(ThreadId tid, SizeT n)
++{
++   return new_block(tid, n, VG_(clo_alignment), /*is_zeroed*/False);
++}
++
++/** Wrapper for memalign(). */
++static void* drd_memalign(ThreadId tid, SizeT align, SizeT n)
++{
++   return new_block(tid, n, align, /*is_zeroed*/False);
++}
++
++/** Wrapper for calloc(). */
++static void* drd_calloc(ThreadId tid, SizeT nmemb, SizeT size1)
++{
++   return new_block(tid, nmemb*size1, VG_(clo_alignment),
++                          /*is_zeroed*/True);
++}
++
++/** Wrapper for free(). */
++static void drd_free(ThreadId tid, void* p)
++{
++   handle_free(tid, p);
++}
++
++/**
++ * Wrapper for realloc(). Returns a pointer to the new block of memory, or
++ * NULL if no new block could not be allocated. Notes:
++ * - realloc(NULL, size) has the same effect as malloc(size).
++ * - realloc(p, 0) has the same effect as free(p).
++ * - success is not guaranteed even if the requested size is smaller than the
++ *   allocated size.
++*/
++static void* drd_realloc(ThreadId tid, void* p_old, SizeT new_size)
++{
++   return renew_block(tid, p_old, new_size, VG_(clo_alignment));
++}
++
+ /** Wrapper for __builtin_new(). */
+ static void* drd___builtin_new(ThreadId tid, SizeT n)
+ {

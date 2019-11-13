@@ -1,0 +1,2079 @@
+From: Luca Boccassi <DL-vyatta-help@att.com>
+Date: Tue, 3 Nov 2015 18:39:16 +0000
+Subject: Add VALGRIND_NON_SIMD_CALL5 define
+
+Needed when hijacking a function call with 5 parameters, like the
+DPDK rte_calloc_socket function.
+---
+ callgrind/callgrind.h                         |  12 +-
+ coregrind/m_replacemalloc/vg_replace_malloc.c |   2 +-
+ coregrind/m_scheduler/scheduler.c             |   9 ++
+ coregrind/pub_core_clreq.h                    |   2 +-
+ coregrind/vg_preloaded.c                      |   4 +-
+ drd/drd.h                                     |  54 +++----
+ drd/drd_libstdcxx_intercepts.c                |  12 +-
+ drd/drd_pthread_intercepts.c                  | 210 +++++++++++++-------------
+ drd/drd_qtcore_intercepts.c                   |  34 +++--
+ drd/tests/rwlock_race.c                       |   2 +-
+ helgrind/helgrind.h                           |  12 +-
+ helgrind/hg_intercepts.c                      |  24 +--
+ include/valgrind.h                            | 167 ++++++++++++--------
+ memcheck/mc_replace_strmem.c                  |   2 +-
+ memcheck/memcheck.h                           |  36 ++---
+ memcheck/tests/vbit-test/valgrind.c           |   2 +-
+ 16 files changed, 320 insertions(+), 264 deletions(-)
+
+--- a/callgrind/callgrind.h
++++ b/callgrind/callgrind.h
+@@ -84,7 +84,7 @@ typedef
+ /* Dump current state of cost centers, and zero them afterwards */
+ #define CALLGRIND_DUMP_STATS                                    \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DUMP_STATS,       \
+-                                  0, 0, 0, 0, 0)
++                                  0, 0, 0, 0, 0, 0)
+ 
+ /* Dump current state of cost centers, and zero them afterwards.
+    The argument is appended to a string stating the reason which triggered
+@@ -92,12 +92,12 @@ typedef
+    profile data dump. */
+ #define CALLGRIND_DUMP_STATS_AT(pos_str)                        \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DUMP_STATS_AT,    \
+-                                  pos_str, 0, 0, 0, 0)
++                                  pos_str, 0, 0, 0, 0, 0)
+ 
+ /* Zero cost centers */
+ #define CALLGRIND_ZERO_STATS                                    \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__ZERO_STATS,       \
+-                                  0, 0, 0, 0, 0)
++                                  0, 0, 0, 0, 0, 0)
+ 
+ /* Toggles collection state.
+    The collection state specifies whether the happening of events
+@@ -105,7 +105,7 @@ typedef
+    by increment of counters in a cost center */
+ #define CALLGRIND_TOGGLE_COLLECT                                \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__TOGGLE_COLLECT,   \
+-                                  0, 0, 0, 0, 0)
++                                  0, 0, 0, 0, 0, 0)
+ 
+ /* Start full callgrind instrumentation if not already switched on.
+    When cache simulation is done, it will flush the simulated cache;
+@@ -113,7 +113,7 @@ typedef
+    cache misses which would not have happened in reality. */
+ #define CALLGRIND_START_INSTRUMENTATION                              \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__START_INSTRUMENTATION, \
+-                                  0, 0, 0, 0, 0)
++                                  0, 0, 0, 0, 0, 0)
+ 
+ /* Stop full callgrind instrumentation if not already switched off.
+    This flushes Valgrinds translation cache, and does no additional
+@@ -124,6 +124,6 @@ typedef
+    the option "--instr-atstart=no". */
+ #define CALLGRIND_STOP_INSTRUMENTATION                               \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__STOP_INSTRUMENTATION,  \
+-                                  0, 0, 0, 0, 0)
++                                  0, 0, 0, 0, 0, 0)
+ 
+ #endif /* __CALLGRIND_H */
+--- a/coregrind/m_replacemalloc/vg_replace_malloc.c
++++ b/coregrind/m_replacemalloc/vg_replace_malloc.c
+@@ -1317,7 +1317,7 @@ static void init(void)
+    init_done = 1;
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__GET_MALLOCFUNCS, &info,
+-                                   0, 0, 0, 0);
++                                   0, 0, 0, 0, 0);
+ }
+ 
+ /*--------------------------------------------------------------------*/
+--- a/coregrind/m_scheduler/scheduler.c
++++ b/coregrind/m_scheduler/scheduler.c
+@@ -1891,6 +1891,15 @@ void do_client_request ( ThreadId tid )
+                 (Addr)f );
+          break;
+       }
++      case VG_USERREQ__CLIENT_CALL5: {
++         UWord (*f)(ThreadId, UWord, UWord, UWord, UWord, UWord) = (void*)arg[1];
++     if (f == NULL)
++        VG_(message)(Vg_DebugMsg, "VG_USERREQ__CLIENT_CALL5: func=%p\n", f);
++     else
++        SET_CLCALL_RETVAL(tid, f ( tid, arg[2], arg[3], arg[4], arg[5],
++                arg[6] ), (Addr)f );
++         break;
++      }
+ 
+       // Nb: this looks like a circular definition, because it kind of is.
+       // See comment in valgrind.h to understand what's going on.
+--- a/coregrind/pub_core_clreq.h
++++ b/coregrind/pub_core_clreq.h
+@@ -80,7 +80,7 @@ static int VALGRIND_INTERNAL_PRINTF(cons
+    va_start(vargs, format);
+    VALGRIND_DO_CLIENT_REQUEST(
+       _qzz_res, 0, VG_USERREQ__INTERNAL_PRINTF_VALIST_BY_REF,
+-      (unsigned long)format, (unsigned long)&vargs, 0, 0, 0
++      (unsigned long)format, (unsigned long)&vargs, 0, 0, 0, 0
+    );
+    va_end(vargs);
+    return _qzz_res;
+--- a/coregrind/vg_preloaded.c
++++ b/coregrind/vg_preloaded.c
+@@ -79,7 +79,8 @@ void VG_NOTIFY_ON_LOAD(freeres)(Vg_Freer
+ #  endif
+ #  endif
+ 
+-   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__FREERES_DONE, 0, 0, 0, 0, 0);
++   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__FREERES_DONE,
++                                   0, 0, 0, 0, 0, 0);
+    /*NOTREACHED*/
+    *(volatile int *)0 = 'x';
+ }
+@@ -119,7 +120,7 @@ void * VG_NOTIFY_ON_LOAD(ifunc_wrapper)
+        led to this function. This client request eventually gives control to
+        the function VG_(redir_add_ifunc_target) in m_redir.c  */
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__ADD_IFUNC_TARGET,
+-                                    fn.nraddr, fnentry, 0, 0, 0);
++                                    fn.nraddr, fnentry, 0, 0, 0, 0);
+     return (void*)result;
+ }
+ 
+--- a/drd/drd.h
++++ b/drd/drd.h
+@@ -67,13 +67,13 @@
+ #define DRD_GET_VALGRIND_THREADID                                          \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                           \
+                                    VG_USERREQ__DRD_GET_VALGRIND_THREAD_ID, \
+-                                   0, 0, 0, 0, 0)
++                                   0, 0, 0, 0, 0, 0)
+ 
+ /** Obtain the thread ID assigned by DRD. */
+ #define DRD_GET_DRD_THREADID                                            \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                        \
+                                    VG_USERREQ__DRD_GET_DRD_THREAD_ID,   \
+-                                   0, 0, 0, 0, 0)
++                                   0, 0, 0, 0, 0, 0)
+ 
+ 
+ /** Tell DRD not to complain about data races for the specified variable. */
+@@ -82,7 +82,7 @@
+ /** Tell DRD to no longer ignore data races for the specified variable. */
+ #define DRD_STOP_IGNORING_VAR(x)                                       \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_FINISH_SUPPRESSION, \
+-                                   &(x), sizeof(x), 0, 0, 0)
++                                   &(x), sizeof(x), 0, 0, 0, 0)
+ 
+ /**
+  * Tell DRD to trace all memory accesses for the specified variable
+@@ -90,14 +90,14 @@
+  */
+ #define DRD_TRACE_VAR(x)                                             \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_START_TRACE_ADDR, \
+-                                   &(x), sizeof(x), 0, 0, 0)
++                                   &(x), sizeof(x), 0, 0, 0, 0)
+ 
+ /**
+  * Tell DRD to stop tracing memory accesses for the specified variable.
+  */
+ #define DRD_STOP_TRACING_VAR(x)                                       \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_STOP_TRACE_ADDR, \
+-                                   &(x), sizeof(x), 0, 0, 0)
++                                   &(x), sizeof(x), 0, 0, 0, 0)
+ 
+ /**
+  * @defgroup RaceDetectionAnnotations Data race detection annotations.
+@@ -116,7 +116,7 @@
+  */
+ #define ANNOTATE_HAPPENS_BEFORE(addr)                                       \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_HAPPENS_BEFORE, \
+-                                   addr, 0, 0, 0, 0)
++                                   addr, 0, 0, 0, 0, 0)
+ 
+ /**
+  * Tell DRD that the memory accesses executed after this annotation will
+@@ -128,7 +128,7 @@
+  */
+ #define ANNOTATE_HAPPENS_AFTER(addr)                                       \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_HAPPENS_AFTER, \
+-                                   addr, 0, 0, 0, 0)
++                                   addr, 0, 0, 0, 0, 0)
+ 
+ #else /* __HELGRIND_H */
+ 
+@@ -218,12 +218,12 @@
+ /** Tell DRD that a reader-writer lock object has been initialized. */
+ #define ANNOTATE_RWLOCK_CREATE(rwlock)                                     \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_RWLOCK_CREATE, \
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+ 
+ /** Tell DRD that a reader-writer lock object has been destroyed. */
+ #define ANNOTATE_RWLOCK_DESTROY(rwlock)                                     \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_RWLOCK_DESTROY, \
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+ 
+ /**
+  * Tell DRD that a reader-writer lock has been acquired. is_w == 1 means that
+@@ -232,7 +232,7 @@
+  */
+ #define ANNOTATE_RWLOCK_ACQUIRED(rwlock, is_w)                               \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_RWLOCK_ACQUIRED, \
+-                                   rwlock, is_w, 0, 0, 0)
++                                   rwlock, is_w, 0, 0, 0, 0)
+ 
+ #endif /* __HELGRIND_H */
+ 
+@@ -257,7 +257,7 @@
+  */
+ #define ANNOTATE_RWLOCK_RELEASED(rwlock, is_w)                               \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_RWLOCK_RELEASED, \
+-                                   rwlock, is_w, 0, 0, 0);
++                                   rwlock, is_w, 0, 0, 0, 0);
+ 
+ #endif /* __HELGRIND_H */
+ 
+@@ -274,27 +274,27 @@
+ /** Tell DRD that a semaphore object is going to be initialized. */
+ #define ANNOTATE_SEM_INIT_PRE(sem, value)                                 \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_SEM_INIT_PRE, \
+-                                   sem, value, 0, 0, 0);
++                                   sem, value, 0, 0, 0, 0);
+ 
+ /** Tell DRD that a semaphore object has been destroyed. */
+ #define ANNOTATE_SEM_DESTROY_POST(sem)                                        \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_SEM_DESTROY_POST, \
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+ 
+ /** Tell DRD that a semaphore is going to be acquired. */
+ #define ANNOTATE_SEM_WAIT_PRE(sem)                                        \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_SEM_WAIT_PRE, \
+-                                   sem, 0, 0, 0, 0)
++                                   sem, 0, 0, 0, 0, 0)
+ 
+ /** Tell DRD that a semaphore has been acquired. */
+ #define ANNOTATE_SEM_WAIT_POST(sem)                                        \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_SEM_WAIT_POST, \
+-                                   sem, 0, 0, 0, 0)
++                                   sem, 0, 0, 0, 0, 0)
+ 
+ /** Tell DRD that a semaphore is going to be released. */
+ #define ANNOTATE_SEM_POST_PRE(sem)                                        \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATE_SEM_POST_PRE, \
+-                                   sem, 0, 0, 0, 0)
++                                   sem, 0, 0, 0, 0, 0)
+ 
+ /*
+  * Report that a barrier has been initialized with a given barrier count.  The
+@@ -305,25 +305,25 @@
+ #define ANNOTATE_BARRIER_INIT(barrier, count, reinitialization_allowed) \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATION_UNIMP,    \
+                                    "ANNOTATE_BARRIER_INIT", barrier,    \
+-                                   count, reinitialization_allowed, 0)
++                                   count, reinitialization_allowed, 0, 0)
+ 
+ /* Report that a barrier has been destroyed. */
+ #define ANNOTATE_BARRIER_DESTROY(barrier)                               \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATION_UNIMP,    \
+                                    "ANNOTATE_BARRIER_DESTROY",          \
+-                                   barrier, 0, 0, 0)
++                                   barrier, 0, 0, 0, 0)
+ 
+ /* Report that the calling thread is about to start waiting for a barrier. */
+ #define ANNOTATE_BARRIER_WAIT_BEFORE(barrier)                           \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATION_UNIMP,    \
+                                    "ANNOTATE_BARRIER_WAIT_BEFORE",      \
+-                                   barrier, 0, 0, 0)
++                                   barrier, 0, 0, 0, 0)
+ 
+ /* Report that the calling thread has just finished waiting for a barrier. */
+ #define ANNOTATE_BARRIER_WAIT_AFTER(barrier)                            \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_ANNOTATION_UNIMP,    \
+                                    "ANNOTATE_BARRIER_WAIT_AFTER",       \
+-                                   barrier, 0, 0, 0)
++                                   barrier, 0, 0, 0, 0)
+ 
+ /**
+  * Tell DRD that a FIFO queue has been created. The abbreviation PCQ stands for
+@@ -361,28 +361,28 @@
+    the memory range [addr, addr + size). */
+ #define ANNOTATE_BENIGN_RACE_SIZED(addr, size, descr)                   \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_START_SUPPRESSION,   \
+-                                   addr, size, 0, 0, 0)
++                                   addr, size, 0, 0, 0, 0)
+ 
+ /** Tell DRD to ignore all reads performed by the current thread. */
+ #define ANNOTATE_IGNORE_READS_BEGIN()                                \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_RECORD_LOADS,     \
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+ 
+ 
+ /** Tell DRD to no longer ignore the reads performed by the current thread. */
+ #define ANNOTATE_IGNORE_READS_END()                                  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_RECORD_LOADS,     \
+-                                   1, 0, 0, 0, 0);
++                                   1, 0, 0, 0, 0, 0);
+ 
+ /** Tell DRD to ignore all writes performed by the current thread. */
+ #define ANNOTATE_IGNORE_WRITES_BEGIN()                                \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_RECORD_STORES,     \
+-                                   0, 0, 0, 0, 0)
++                                   0, 0, 0, 0, 0, 0)
+ 
+ /** Tell DRD to no longer ignore the writes performed by the current thread. */
+ #define ANNOTATE_IGNORE_WRITES_END()                                  \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_RECORD_STORES,     \
+-                                   1, 0, 0, 0, 0)
++                                   1, 0, 0, 0, 0, 0)
+ 
+ /** Tell DRD to ignore all memory accesses performed by the current thread. */
+ #define ANNOTATE_IGNORE_READS_AND_WRITES_BEGIN() \
+@@ -401,7 +401,7 @@
+  */
+ #define ANNOTATE_NEW_MEMORY(addr, size)                           \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_CLEAN_MEMORY,  \
+-                                   addr, size, 0, 0, 0)
++                                   addr, size, 0, 0, 0, 0)
+ 
+ /** Ask DRD to report every access to the specified address. */
+ #define ANNOTATE_TRACE_MEMORY(addr) DRD_TRACE_VAR(*(char*)(addr))
+@@ -412,7 +412,7 @@
+  */
+ #define ANNOTATE_THREAD_NAME(name)                                      \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_SET_THREAD_NAME,     \
+-                                   name, 0, 0, 0, 0)
++                                   name, 0, 0, 0, 0, 0)
+ 
+ /*@}*/
+ 
+--- a/drd/drd_libstdcxx_intercepts.c
++++ b/drd/drd_libstdcxx_intercepts.c
+@@ -72,15 +72,15 @@ int __cxa_guard_acquire_intercept(void *
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   guard, mutex_type_cxa_guard, 0, 0, 0);
++                                   guard, mutex_type_cxa_guard, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, guard);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   guard, 1, 0, 0, 0);
++                                   guard, 1, 0, 0, 0, 0);
+    if (ret == 0) {
+       VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_UNLOCK,
+-                                      guard, mutex_type_cxa_guard, 0, 0, 0);
++                                      guard, mutex_type_cxa_guard, 0, 0, 0, 0);
+       VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_UNLOCK,
+-                                      guard, 0, 0, 0, 0);
++                                      guard, 0, 0, 0, 0, 0);
+    }
+    return ret;
+ }
+@@ -97,10 +97,10 @@ void __cxa_guard_abort_release_intercept
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_UNLOCK,
+-                                   guard, mutex_type_cxa_guard, 0, 0, 0);
++                                   guard, mutex_type_cxa_guard, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, guard);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_UNLOCK,
+-                                   guard, 0, 0, 0, 0);
++                                   guard, 0, 0, 0, 0, 0);
+ }
+ 
+ LIBSTDCXX_FUNC(void, ZuZucxaZuguardZurelease,
+--- a/drd/drd_pthread_intercepts.c
++++ b/drd/drd_pthread_intercepts.c
+@@ -265,7 +265,7 @@ static void DRD_(init)(void)
+ static __always_inline void DRD_(ignore_mutex_ordering)(pthread_mutex_t *mutex)
+ {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_IGNORE_MUTEX_ORDERING,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+ }
+ 
+ static void DRD_(sema_init)(DrdSema* sema)
+@@ -399,21 +399,21 @@ static void DRD_(set_joinable)(const pth
+ {
+    assert(joinable == 0 || joinable == 1);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__SET_JOINABLE,
+-                                   tid, joinable, 0, 0, 0);
++                                   tid, joinable, 0, 0, 0, 0);
+ }
+ 
+ /** Tell DRD that the calling thread is about to enter pthread_create(). */
+ static __always_inline void DRD_(entering_pthread_create)(void)
+ {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__ENTERING_PTHREAD_CREATE,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+ }
+ 
+ /** Tell DRD that the calling thread has left pthread_create(). */
+ static __always_inline void DRD_(left_pthread_create)(void)
+ {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__LEFT_PTHREAD_CREATE,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+ }
+ 
+ /**
+@@ -429,7 +429,7 @@ static void* DRD_(thread_wrapper)(void*
+    arg_copy = *arg_ptr;
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__SET_PTHREADID,
+-                                   pthread_self(), 0, 0, 0, 0);
++                                   pthread_self(), 0, 0, 0, 0, 0);
+ 
+    DRD_(set_joinable)(pthread_self(),
+                       arg_copy.detachstate == PTHREAD_CREATE_JOINABLE);
+@@ -506,7 +506,7 @@ static void DRD_(check_threading_library
+ static void DRD_(set_pthread_id)(void)
+ {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__SET_PTHREADID,
+-                                   pthread_self(), 0, 0, 0, 0);
++                                   pthread_self(), 0, 0, 0, 0, 0);
+ }
+ 
+ /*
+@@ -576,7 +576,7 @@ int pthread_create_intercept(pthread_t*
+    DRD_(sema_destroy)(&wrapper_started);
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_START_NEW_SEGMENT,
+-                                   pthread_self(), 0, 0, 0, 0);
++                                   pthread_self(), 0, 0, 0, 0, 0);
+ 
+    return ret;
+ }
+@@ -628,7 +628,7 @@ int thr_create_intercept(void *stk, size
+    DRD_(sema_destroy)(&wrapper_started);
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_START_NEW_SEGMENT,
+-                                   pthread_self(), 0, 0, 0, 0);
++                                   pthread_self(), 0, 0, 0, 0, 0);
+ 
+    return ret;
+ }
+@@ -648,7 +648,7 @@ PTH_FUNCS(int, thrZucreate, thr_create_i
+ static __always_inline
+ int DRD_(_ti_bind_guard_intercept)(int flags) {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__RTLD_BIND_GUARD,
+-                                   flags, 0, 0, 0, 0);
++                                   flags, 0, 0, 0, 0, 0);
+    return DRD_(rtld_bind_guard)(flags);
+ }
+ 
+@@ -656,7 +656,7 @@ static __always_inline
+ int DRD_(_ti_bind_clear_intercept)(int flags) {
+    int ret = DRD_(rtld_bind_clear)(flags);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__RTLD_BIND_CLEAR,
+-                                   flags, 0, 0, 0, 0);
++                                   flags, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -709,7 +709,7 @@ int pthread_join_intercept(pthread_t pt_
+    if (ret == 0)
+    {
+       VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_THREAD_JOIN,
+-                                      pt_joinee, 0, 0, 0, 0);
++                                      pt_joinee, 0, 0, 0, 0, 0);
+    }
+    ANNOTATE_IGNORE_READS_AND_WRITES_END();
+    return ret;
+@@ -737,7 +737,7 @@ int thr_join_intercept(thread_t joinee,
+    if (ret == 0)
+    {
+       VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_THREAD_JOIN,
+-                                      joinee, 0, 0, 0, 0);
++                                      joinee, 0, 0, 0, 0, 0);
+    }
+    return ret;
+ }
+@@ -773,10 +773,10 @@ int pthread_cancel_intercept(pthread_t p
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_THREAD_CANCEL,
+-                                   pt_thread, 0, 0, 0, 0);
++                                   pt_thread, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, pt_thread);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_THREAD_CANCEL,
+-                                   pt_thread, ret==0, 0, 0, 0);
++                                   pt_thread, ret==0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -820,10 +820,10 @@ int pthread_mutex_init_intercept(pthread
+       pthread_mutexattr_gettype(attr, &mt);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_INIT,
+                                    mutex, DRD_(pthread_to_drd_mutex_type)(mt),
+-                                   0, 0, 0);
++                                   0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, mutex, attr);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_INIT,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -841,10 +841,10 @@ int mutex_init_intercept(mutex_t *mutex,
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_INIT,
+                                    mutex, DRD_(thread_to_drd_mutex_type)(type),
+-                                   0, 0, 0);
++                                   0, 0, 0, 0);
+    CALL_FN_W_WWW(ret, fn, mutex, type, arg);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_INIT,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -860,10 +860,10 @@ int pthread_mutex_destroy_intercept(pthr
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_DESTROY,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_DESTROY,
+-                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0);
++                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -883,10 +883,10 @@ int pthread_mutex_lock_intercept(pthread
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0);
++                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, ret == 0, 0, 0, 0);
++                                   mutex, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -911,10 +911,10 @@ void lmutex_lock_intercept(mutex_t *mute
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+                                    mutex,
+                                    DRD_(mutex_type)((pthread_mutex_t *) mutex),
+-                                   False /* try_lock */, 0, 0);
++                                   False /* try_lock */, 0, 0, 0);
+    CALL_FN_v_W(fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, True /* took_lock */, 0, 0, 0);
++                                   mutex, True /* took_lock */, 0, 0, 0, 0);
+ }
+ 
+ PTH_FUNCS(void, lmutexZulock, lmutex_lock_intercept,
+@@ -928,10 +928,10 @@ int pthread_mutex_trylock_intercept(pthr
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, DRD_(mutex_type)(mutex), 1, 0, 0);
++                                   mutex, DRD_(mutex_type)(mutex), 1, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, ret == 0, 0, 0, 0);
++                                   mutex, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -952,10 +952,10 @@ int pthread_mutex_timedlock_intercept(pt
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0);
++                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, mutex, abs_timeout);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, ret == 0, 0, 0, 0);
++                                   mutex, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -976,10 +976,10 @@ int pthread_mutex_unlock_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_UNLOCK,
+-                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0);
++                                   mutex, DRD_(mutex_type)(mutex), 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_UNLOCK,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1002,10 +1002,10 @@ void lmutex_unlock_intercept(mutex_t *mu
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_UNLOCK,
+                                    mutex,
+                                    DRD_(mutex_type)((pthread_mutex_t *) mutex),
+-                                   0, 0, 0);
++                                   0, 0, 0, 0);
+    CALL_FN_v_W(fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_UNLOCK,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+ }
+ 
+ PTH_FUNCS(void, lmutexZuunlock, lmutex_unlock_intercept,
+@@ -1020,10 +1020,10 @@ int pthread_cond_init_intercept(pthread_
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_INIT,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, cond, attr);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_INIT,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1039,10 +1039,10 @@ int cond_init_intercept(cond_t *cond, in
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_INIT,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    CALL_FN_W_WWW(ret, fn, cond, type, arg);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_INIT,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1058,10 +1058,10 @@ int pthread_cond_destroy_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_DESTROY,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, cond);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_DESTROY,
+-                                   cond, ret==0, 0, 0, 0);
++                                   cond, ret==0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1081,10 +1081,11 @@ int pthread_cond_wait_intercept(pthread_
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_WAIT,
+-                                   cond, mutex, DRD_(mutex_type)(mutex), 0, 0);
++                                   cond, mutex, DRD_(mutex_type)(mutex), 0, 0,
++                                   0);
+    CALL_FN_W_WW(ret, fn, cond, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_WAIT,
+-                                   cond, mutex, 1, 0, 0);
++                                   cond, mutex, 1, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1106,10 +1107,11 @@ int pthread_cond_timedwait_intercept(pth
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_WAIT,
+-                                   cond, mutex, DRD_(mutex_type)(mutex), 0, 0);
++                                   cond, mutex, DRD_(mutex_type)(mutex), 0, 0,
++                                   0);
+    CALL_FN_W_WWW(ret, fn, cond, mutex, abstime);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_WAIT,
+-                                   cond, mutex, 1, 0, 0);
++                                   cond, mutex, 1, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1141,10 +1143,10 @@ int pthread_cond_signal_intercept(pthrea
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_SIGNAL,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, cond);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_SIGNAL,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1164,10 +1166,10 @@ int pthread_cond_broadcast_intercept(pth
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_COND_BROADCAST,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, cond);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_COND_BROADCAST,
+-                                   cond, 0, 0, 0, 0);
++                                   cond, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1189,10 +1191,10 @@ int pthread_spin_init_intercept(pthread_
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SPIN_INIT_OR_UNLOCK,
+-                                   spinlock, 0, 0, 0, 0);
++                                   spinlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, spinlock, pshared);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SPIN_INIT_OR_UNLOCK,
+-                                   spinlock, 0, 0, 0, 0);
++                                   spinlock, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1206,10 +1208,10 @@ int pthread_spin_destroy_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_DESTROY,
+-                                   spinlock, 0, 0, 0, 0);
++                                   spinlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, spinlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_DESTROY,
+-                                   spinlock, mutex_type_spinlock, 0, 0, 0);
++                                   spinlock, mutex_type_spinlock, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1223,10 +1225,10 @@ int pthread_spin_lock_intercept(pthread_
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   spinlock, mutex_type_spinlock, 0, 0, 0);
++                                   spinlock, mutex_type_spinlock, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, spinlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   spinlock, ret == 0, 0, 0, 0);
++                                   spinlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1240,10 +1242,10 @@ int pthread_spin_trylock_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   spinlock, mutex_type_spinlock, 0, 0, 0);
++                                   spinlock, mutex_type_spinlock, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, spinlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   spinlock, ret == 0, 0, 0, 0);
++                                   spinlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1257,10 +1259,10 @@ int pthread_spin_unlock_intercept(pthrea
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SPIN_INIT_OR_UNLOCK,
+-                                   spinlock, mutex_type_spinlock, 0, 0, 0);
++                                   spinlock, mutex_type_spinlock, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, spinlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SPIN_INIT_OR_UNLOCK,
+-                                   spinlock, 0, 0, 0, 0);
++                                   spinlock, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1279,10 +1281,10 @@ int pthread_barrier_init_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_BARRIER_INIT,
+-                                   barrier, pthread_barrier, count, 0, 0);
++                                   barrier, pthread_barrier, count, 0, 0, 0);
+    CALL_FN_W_WWW(ret, fn, barrier, attr, count);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_BARRIER_INIT,
+-                                   barrier, pthread_barrier, 0, 0, 0);
++                                   barrier, pthread_barrier, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1297,10 +1299,10 @@ int pthread_barrier_destroy_intercept(pt
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_BARRIER_DESTROY,
+-                                   barrier, pthread_barrier, 0, 0, 0);
++                                   barrier, pthread_barrier, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, barrier);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_BARRIER_DESTROY,
+-                                   barrier, pthread_barrier, 0, 0, 0);
++                                   barrier, pthread_barrier, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1314,12 +1316,12 @@ int pthread_barrier_wait_intercept(pthre
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_BARRIER_WAIT,
+-                                   barrier, pthread_barrier, 0, 0, 0);
++                                   barrier, pthread_barrier, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, barrier);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_BARRIER_WAIT,
+                               barrier, pthread_barrier,
+                               ret == 0 || ret == PTHREAD_BARRIER_SERIAL_THREAD,
+-                              ret == PTHREAD_BARRIER_SERIAL_THREAD, 0);
++                              ret == PTHREAD_BARRIER_SERIAL_THREAD, 0, 0);
+    return ret;
+ }
+ 
+@@ -1335,10 +1337,10 @@ int sem_init_intercept(sem_t *sem, int p
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_INIT,
+-                                   sem, pshared, value, 0, 0);
++                                   sem, pshared, value, 0, 0, 0);
+    CALL_FN_W_WWW(ret, fn, sem, pshared, value);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_INIT,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1354,10 +1356,10 @@ int sema_init_intercept(sema_t *sem, uns
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_INIT,
+                                    sem, type == USYNC_PROCESS ? 1 : 0,
+-                                   value, 0, 0);
++                                   value, 0, 0, 0);
+    CALL_FN_W_WWWW(ret, fn, sem, value, type, arg);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_INIT,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1373,10 +1375,10 @@ int sem_destroy_intercept(sem_t *sem)
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_DESTROY,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, sem);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_DESTROY,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1393,11 +1395,11 @@ sem_t* sem_open_intercept(const char *na
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_OPEN,
+-                                   name, oflag, mode, value, 0);
++                                   name, oflag, mode, value, 0, 0);
+    CALL_FN_W_WWWW(ret, fn, name, oflag, mode, value);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_OPEN,
+                                    ret != SEM_FAILED ? ret : 0,
+-                                   name, oflag, mode, value);
++                                   name, oflag, mode, value, 0);
+    return ret;
+ }
+ 
+@@ -1411,10 +1413,10 @@ static __always_inline int sem_close_int
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_CLOSE,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, sem);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_CLOSE,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1426,10 +1428,10 @@ static __always_inline int sem_wait_inte
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_WAIT,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, sem);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_WAIT,
+-                                   sem, ret == 0, 0, 0, 0);
++                                   sem, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1444,10 +1446,10 @@ static __always_inline int sem_trywait_i
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_WAIT,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, sem);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_WAIT,
+-                                   sem, ret == 0, 0, 0, 0);
++                                   sem, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1463,10 +1465,10 @@ int sem_timedwait_intercept(sem_t *sem,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_WAIT,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, sem, abs_timeout);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_WAIT,
+-                                   sem, ret == 0, 0, 0, 0);
++                                   sem, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1488,10 +1490,10 @@ static __always_inline int sem_post_inte
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_SEM_POST,
+-                                   sem, 0, 0, 0, 0);
++                                   sem, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, sem);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_SEM_POST,
+-                                   sem, ret == 0, 0, 0, 0);
++                                   sem, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1512,10 +1514,10 @@ int pthread_rwlock_init_intercept(pthrea
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_INIT,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, rwlock, attr);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_INIT,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1532,10 +1534,10 @@ int rwlock_init_intercept(rwlock_t *rwlo
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_INIT,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_WWW(ret, fn, rwlock, type, arg);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_INIT,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1551,10 +1553,10 @@ int pthread_rwlock_destroy_intercept(pth
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_DESTROY,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_DESTROY,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1576,10 +1578,10 @@ int pthread_rwlock_rdlock_intercept(pthr
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_RDLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_RDLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1602,10 +1604,10 @@ void lrw_rdlock_intercept(rwlock_t *rwlo
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_RDLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_v_W(fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_RDLOCK,
+-                                   rwlock, True /* took_lock */, 0, 0, 0);
++                                   rwlock, True /* took_lock */, 0, 0, 0, 0);
+ }
+ 
+ PTH_FUNCS(void, lrwZurdlock, lrw_rdlock_intercept,
+@@ -1619,10 +1621,10 @@ int pthread_rwlock_wrlock_intercept(pthr
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_WRLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_WRLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1645,10 +1647,10 @@ void lrw_wrlock_intercept(rwlock_t *rwlo
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_WRLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_v_W(fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_WRLOCK,
+-                                   rwlock, True /* took_lock */, 0, 0, 0);
++                                   rwlock, True /* took_lock */, 0, 0, 0, 0);
+ }
+ 
+ PTH_FUNCS(void, lrwZuwrlock, lrw_wrlock_intercept,
+@@ -1663,10 +1665,10 @@ int pthread_rwlock_timedrdlock_intercept
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_RDLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, rwlock, timeout);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_RDLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1689,10 +1691,10 @@ int pthread_rwlock_timedwrlock_intercept
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_WRLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, rwlock, timeout);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_WRLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1714,10 +1716,10 @@ int pthread_rwlock_tryrdlock_intercept(p
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_RDLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_RDLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1739,10 +1741,10 @@ int pthread_rwlock_trywrlock_intercept(p
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_WRLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_WRLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -1764,10 +1766,10 @@ int pthread_rwlock_unlock_intercept(pthr
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_RWLOCK_UNLOCK,
+-                                   rwlock, 0, 0, 0, 0);
++                                   rwlock, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, rwlock);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_RWLOCK_UNLOCK,
+-                                   rwlock, ret == 0, 0, 0, 0);
++                                   rwlock, ret == 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+--- a/drd/drd_qtcore_intercepts.c
++++ b/drd/drd_qtcore_intercepts.c
+@@ -91,10 +91,11 @@ QT4CORE_FUNC(void, _ZN6QMutexC1ENS_13Rec
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_INIT,
+-                                   mutex, qt_to_drd_mutex_type(mode), 0, 0, 0);
++                                   mutex, qt_to_drd_mutex_type(mode), 0, 0, 0,
++                                   0);
+    CALL_FN_W_WW(ret, fn, mutex, mode);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_INIT,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+ }
+ 
+ // QMutex::QMutex(RecursionMode) -- _ZN6QMutexC2ENS_13RecursionModeE
+@@ -106,10 +107,11 @@ QT4CORE_FUNC(void, _ZN6QMutexC2ENS_13Rec
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_INIT,
+-                                   mutex, qt_to_drd_mutex_type(mode), 0, 0, 0);
++                                   mutex, qt_to_drd_mutex_type(mode), 0, 0, 0,
++                                   0);
+    CALL_FN_W_WW(ret, fn, mutex, mode);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_INIT,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+ }
+ 
+ // QMutex::~QMutex() -- _ZN6QMutexD1Ev
+@@ -120,10 +122,10 @@ QT4CORE_FUNC(void, _ZN6QMutexD1Ev,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_DESTROY,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_DESTROY,
+-                                   mutex, mutex_type(mutex), 0, 0, 0);
++                                   mutex, mutex_type(mutex), 0, 0, 0, 0);
+ }
+ 
+ // QMutex::~QMutex() -- _ZN6QMutexD2Ev
+@@ -134,10 +136,10 @@ QT4CORE_FUNC(void, _ZN6QMutexD2Ev,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_DESTROY,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_DESTROY,
+-                                   mutex, mutex_type(mutex), 0, 0, 0);
++                                   mutex, mutex_type(mutex), 0, 0, 0, 0);
+ }
+ 
+ // QMutex::lock() -- _ZN6QMutex4lockEv
+@@ -148,10 +150,10 @@ QT4CORE_FUNC(void, _ZN6QMutex4lockEv,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, mutex_type(mutex), 0, 0, 0);
++                                   mutex, mutex_type(mutex), 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, 1, 0, 0, 0);
++                                   mutex, 1, 0, 0, 0, 0);
+ }
+ 
+ // QMutex::tryLock() -- _ZN6QMutex7tryLockEv
+@@ -162,10 +164,10 @@ QT4CORE_FUNC(int, _ZN6QMutex7tryLockEv,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, mutex_type(mutex), 1, 0, 0);
++                                   mutex, mutex_type(mutex), 1, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, ret, 0, 0, 0);
++                                   mutex, ret, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -178,10 +180,10 @@ QT4CORE_FUNC(int, _ZN6QMutex7tryLockEi,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_LOCK,
+-                                   mutex, mutex_type(mutex), 1, 0, 0);
++                                   mutex, mutex_type(mutex), 1, 0, 0, 0);
+    CALL_FN_W_WW(ret, fn, mutex, timeout_ms);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_LOCK,
+-                                   mutex, ret, 0, 0, 0);
++                                   mutex, ret, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -193,8 +195,8 @@ QT4CORE_FUNC(void, _ZN6QMutex6unlockEv,
+    OrigFn fn;
+    VALGRIND_GET_ORIG_FN(fn);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__PRE_MUTEX_UNLOCK,
+-                                   mutex, mutex_type(mutex), 0, 0, 0);
++                                   mutex, mutex_type(mutex), 0, 0, 0, 0);
+    CALL_FN_W_W(ret, fn, mutex);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__POST_MUTEX_UNLOCK,
+-                                   mutex, 0, 0, 0, 0);
++                                   mutex, 0, 0, 0, 0, 0);
+ }
+--- a/drd/tests/rwlock_race.c
++++ b/drd/tests/rwlock_race.c
+@@ -40,7 +40,7 @@ int main(int argc, char** argv)
+ #if 0
+ 
+   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DRD_TRACE_ADDR,
+-                                  &s_racy, 0, 0, 0, 0);
++                                  &s_racy, 0, 0, 0, 0, 0);
+ #endif
+ 
+   pthread_rwlock_init(&s_rwlock, 0);
+--- a/helgrind/helgrind.h
++++ b/helgrind/helgrind.h
+@@ -167,7 +167,7 @@ typedef
+       _arg1 = (long int)(_arg1F);                        \
+       VALGRIND_DO_CLIENT_REQUEST_STMT(                   \
+                                  (_creqF),               \
+-                                 _arg1, 0,0,0,0);        \
++                                 _arg1, 0,0,0,0,0);      \
+    } while (0)
+ 
+ #define DO_CREQ_W_W(_resF, _dfltF, _creqF, _ty1F,_arg1F) \
+@@ -178,7 +178,7 @@ typedef
+       _qzz_res = VALGRIND_DO_CLIENT_REQUEST_EXPR(        \
+                                  (_dfltF),               \
+                                  (_creqF),               \
+-                                 _arg1, 0,0,0,0);        \
++                                 _arg1, 0,0,0,0,0);      \
+       _resF = _qzz_res;                                  \
+    } while (0)
+ 
+@@ -191,7 +191,7 @@ typedef
+       _arg2 = (long int)(_arg2F);                        \
+       VALGRIND_DO_CLIENT_REQUEST_STMT(                   \
+                                  (_creqF),               \
+-                                 _arg1,_arg2,0,0,0);     \
++                                 _arg1,_arg2,0,0,0,0);   \
+    } while (0)
+ 
+ #define DO_CREQ_v_WWW(_creqF, _ty1F,_arg1F,              \
+@@ -206,7 +206,8 @@ typedef
+       _arg3 = (long int)(_arg3F);                        \
+       VALGRIND_DO_CLIENT_REQUEST_STMT(                   \
+                                  (_creqF),               \
+-                                 _arg1,_arg2,_arg3,0,0); \
++                                 _arg1,_arg2,_arg3,0,0,  \
++                                 0);                     \
+    } while (0)
+ 
+ #define DO_CREQ_W_WWW(_resF, _dfltF, _creqF, _ty1F,_arg1F, \
+@@ -221,7 +222,8 @@ typedef
+       _qzz_res = VALGRIND_DO_CLIENT_REQUEST_EXPR(        \
+                                  (_dfltF),               \
+                                  (_creqF),               \
+-                                 _arg1,_arg2,_arg3,0,0); \
++                                 _arg1,_arg2,_arg3,0,0,  \
++                                 0);                     \
+       _resF = _qzz_res;                                  \
+    } while (0)
+ 
+--- a/helgrind/hg_intercepts.c
++++ b/helgrind/hg_intercepts.c
+@@ -120,7 +120,7 @@
+       assert(sizeof(_ty1F) == sizeof(Word));             \
+       _arg1 = (Word)(_arg1F);                            \
+       VALGRIND_DO_CLIENT_REQUEST_STMT((_creqF),          \
+-                                 _arg1, 0,0,0,0);        \
++                                 _arg1, 0,0,0,0,0);      \
+    } while (0)
+ 
+ #define DO_CREQ_v_WW(_creqF, _ty1F,_arg1F, _ty2F,_arg2F) \
+@@ -131,7 +131,7 @@
+       _arg1 = (Word)(_arg1F);                            \
+       _arg2 = (Word)(_arg2F);                            \
+       VALGRIND_DO_CLIENT_REQUEST_STMT((_creqF),          \
+-                                 _arg1,_arg2,0,0,0);     \
++                                 _arg1,_arg2,0,0,0,0);   \
+    } while (0)
+ 
+ #define DO_CREQ_W_WW(_resF, _creqF, _ty1F,_arg1F,        \
+@@ -144,7 +144,7 @@
+       _arg2 = (Word)(_arg2F);                            \
+       _res = VALGRIND_DO_CLIENT_REQUEST_EXPR(2,          \
+                                  (_creqF),               \
+-                                 _arg1,_arg2,0,0,0);     \
++                                 _arg1,_arg2,0,0,0,0);   \
+       _resF = _res;                                      \
+    } while (0)
+ 
+@@ -159,7 +159,8 @@
+       _arg2 = (Word)(_arg2F);                            \
+       _arg3 = (Word)(_arg3F);                            \
+       VALGRIND_DO_CLIENT_REQUEST_STMT((_creqF),          \
+-                                 _arg1,_arg2,_arg3,0,0); \
++                                 _arg1,_arg2,_arg3,0,0,  \
++                                 0);                     \
+    } while (0)
+ 
+ #define DO_CREQ_v_WWWW(_creqF, _ty1F,_arg1F,             \
+@@ -176,7 +177,8 @@
+       _arg3 = (Word)(_arg3F);                            \
+       _arg4 = (Word)(_arg4F);                            \
+       VALGRIND_DO_CLIENT_REQUEST_STMT((_creqF),          \
+-                             _arg1,_arg2,_arg3,_arg4,0); \
++                             _arg1,_arg2,_arg3,_arg4,0,  \
++                             0);                         \
+    } while (0)
+ 
+ #define DO_PthAPIerror(_fnnameF, _errF)                  \
+@@ -311,7 +313,7 @@ static void hg_init(void)
+ static int _ti_bind_guard_intercept_WRK(int flags)
+ {
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_RTLD_BIND_GUARD,
+-                                   flags, 0, 0, 0, 0);
++                                   flags, 0, 0, 0, 0, 0);
+    return hg_rtld_bind_guard(flags);
+ }
+ 
+@@ -319,7 +321,7 @@ static int _ti_bind_clear_intercept_WRK(
+ {
+    int ret = hg_rtld_bind_clear(flags);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_RTLD_BIND_CLEAR,
+-                                   flags, 0, 0, 0, 0);
++                                   flags, 0, 0, 0, 0, 0);
+    return ret;
+ }
+ 
+@@ -423,10 +425,10 @@ static int pthread_create_WRK(pthread_t
+    VALGRIND_HG_DISABLE_CHECKING(&xargs, sizeof(xargs));
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_PTHREAD_CREATE_BEGIN,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+    CALL_FN_W_WWWW(ret, fn, thread,attr,mythread_wrapper,&xargs[0]);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_PTHREAD_CREATE_END,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+ 
+    if (ret == 0) {
+       /* we have to wait for the child to notify the tool of its
+@@ -505,11 +507,11 @@ static int thr_create_WRK(void *stk, siz
+    VALGRIND_HG_DISABLE_CHECKING(&xargs, sizeof(xargs));
+ 
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_PTHREAD_CREATE_BEGIN,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+    CALL_FN_W_6W(ret, fn, stk, stksize, mythread_wrapper, start, flags,
+                 new_thread);
+    VALGRIND_DO_CLIENT_REQUEST_STMT(_VG_USERREQ__HG_PTHREAD_CREATE_END,
+-                                   0, 0, 0, 0, 0);
++                                   0, 0, 0, 0, 0, 0);
+ 
+    if (ret == 0) {
+       while (xargs[2] != 0) {
+--- a/include/valgrind.h
++++ b/include/valgrind.h
+@@ -192,16 +192,20 @@
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST(_zzq_rlval, _zzq_default,            \
+                                    _zzq_request, _zzq_arg1, _zzq_arg2,  \
+-                                   _zzq_arg3, _zzq_arg4, _zzq_arg5)     \
++                                   _zzq_arg3, _zzq_arg4, _zzq_arg5,     \
++                                   _zzq_arg6)                           \
+   do { (_zzq_rlval) = VALGRIND_DO_CLIENT_REQUEST_EXPR((_zzq_default),   \
+                         (_zzq_request), (_zzq_arg1), (_zzq_arg2),       \
+-                        (_zzq_arg3), (_zzq_arg4), (_zzq_arg5)); } while (0)
++                        (_zzq_arg3), (_zzq_arg4), (_zzq_arg5),          \
++                        (_zzq_arg6)); } while (0)
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_STMT(_zzq_request, _zzq_arg1,        \
+-                           _zzq_arg2,  _zzq_arg3, _zzq_arg4, _zzq_arg5) \
++                           _zzq_arg2,  _zzq_arg3, _zzq_arg4, _zzq_arg5, \
++                           _zzq_arg6)                                   \
+   do { (void) VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                        \
+                     (_zzq_request), (_zzq_arg1), (_zzq_arg2),           \
+-                    (_zzq_arg3), (_zzq_arg4), (_zzq_arg5)); } while (0)
++                    (_zzq_arg3), (_zzq_arg4), (_zzq_arg5),              \
++                    (_zzq_arg6)); } while (0)
+ 
+ #if defined(NVALGRIND)
+ 
+@@ -210,8 +214,8 @@
+    assert()) */
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
+-      (_zzq_default)
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++      _zzq_arg6) (_zzq_default)
+ 
+ #else  /* ! NVALGRIND */
+ 
+@@ -268,9 +272,10 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+   __extension__                                                   \
+-  ({volatile unsigned int _zzq_args[6];                           \
++  ({volatile unsigned int _zzq_args[7];                           \
+     volatile unsigned int _zzq_result;                            \
+     _zzq_args[0] = (unsigned int)(_zzq_request);                  \
+     _zzq_args[1] = (unsigned int)(_zzq_arg1);                     \
+@@ -278,6 +283,7 @@ typedef
+     _zzq_args[3] = (unsigned int)(_zzq_arg3);                     \
+     _zzq_args[4] = (unsigned int)(_zzq_arg4);                     \
+     _zzq_args[5] = (unsigned int)(_zzq_arg5);                     \
++    _zzq_args[6] = (unsigned int)(_zzq_arg6);                     \
+     __asm__ volatile(__SPECIAL_INSTRUCTION_PREAMBLE               \
+                      /* %EDX = client_request ( %EAX ) */         \
+                      "xchgl %%ebx,%%ebx"                          \
+@@ -335,19 +341,21 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+     valgrind_do_client_request_expr((uintptr_t)(_zzq_default),    \
+         (uintptr_t)(_zzq_request), (uintptr_t)(_zzq_arg1),        \
+         (uintptr_t)(_zzq_arg2), (uintptr_t)(_zzq_arg3),           \
+-        (uintptr_t)(_zzq_arg4), (uintptr_t)(_zzq_arg5))
++        (uintptr_t)(_zzq_arg4), (uintptr_t)(_zzq_arg5),           \
++        (uintptr_t)(_zzq_arg6))
+ 
+ static __inline uintptr_t
+ valgrind_do_client_request_expr(uintptr_t _zzq_default, uintptr_t _zzq_request,
+                                 uintptr_t _zzq_arg1, uintptr_t _zzq_arg2,
+                                 uintptr_t _zzq_arg3, uintptr_t _zzq_arg4,
+-                                uintptr_t _zzq_arg5)
++                                uintptr_t _zzq_arg5, uintptr_t _zzq_arg6)
+ {
+-    volatile uintptr_t _zzq_args[6];
++    volatile uintptr_t _zzq_args[7];
+     volatile unsigned int _zzq_result;
+     _zzq_args[0] = (uintptr_t)(_zzq_request);
+     _zzq_args[1] = (uintptr_t)(_zzq_arg1);
+@@ -355,6 +363,7 @@ valgrind_do_client_request_expr(uintptr_
+     _zzq_args[3] = (uintptr_t)(_zzq_arg3);
+     _zzq_args[4] = (uintptr_t)(_zzq_arg4);
+     _zzq_args[5] = (uintptr_t)(_zzq_arg5);
++    _zzq_args[6] = (uintptr_t)(_zzq_arg6);
+     __asm { __asm lea eax, _zzq_args __asm mov edx, _zzq_default
+             __SPECIAL_INSTRUCTION_PREAMBLE
+             /* %EDX = client_request ( %EAX ) */
+@@ -408,9 +417,10 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+     __extension__                                                 \
+-    ({ volatile unsigned long int _zzq_args[6];                   \
++    ({ volatile unsigned long int _zzq_args[7];                   \
+     volatile unsigned long int _zzq_result;                       \
+     _zzq_args[0] = (unsigned long int)(_zzq_request);             \
+     _zzq_args[1] = (unsigned long int)(_zzq_arg1);                \
+@@ -418,6 +428,7 @@ typedef
+     _zzq_args[3] = (unsigned long int)(_zzq_arg3);                \
+     _zzq_args[4] = (unsigned long int)(_zzq_arg4);                \
+     _zzq_args[5] = (unsigned long int)(_zzq_arg5);                \
++    _zzq_args[6] = (unsigned long int)(_zzq_arg6);                \
+     __asm__ volatile(__SPECIAL_INSTRUCTION_PREAMBLE               \
+                      /* %RDX = client_request ( %RAX ) */         \
+                      "xchgq %%rbx,%%rbx"                          \
+@@ -480,10 +491,11 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+                                                                   \
+     __extension__                                                 \
+-  ({         unsigned int  _zzq_args[6];                          \
++  ({         unsigned int  _zzq_args[7];                          \
+              unsigned int  _zzq_result;                           \
+              unsigned int* _zzq_ptr;                              \
+     _zzq_args[0] = (unsigned int)(_zzq_request);                  \
+@@ -492,6 +504,7 @@ typedef
+     _zzq_args[3] = (unsigned int)(_zzq_arg3);                     \
+     _zzq_args[4] = (unsigned int)(_zzq_arg4);                     \
+     _zzq_args[5] = (unsigned int)(_zzq_arg5);                     \
++    _zzq_args[6] = (unsigned int)(_zzq_arg6);                     \
+     _zzq_ptr = _zzq_args;                                         \
+     __asm__ volatile("mr 3,%1\n\t" /*default*/                    \
+                      "mr 4,%2\n\t" /*ptr*/                        \
+@@ -550,10 +563,11 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+                                                                   \
+   __extension__                                                   \
+-  ({         unsigned long int  _zzq_args[6];                     \
++  ({         unsigned long int  _zzq_args[7];                     \
+              unsigned long int  _zzq_result;                      \
+              unsigned long int* _zzq_ptr;                         \
+     _zzq_args[0] = (unsigned long int)(_zzq_request);             \
+@@ -562,6 +576,7 @@ typedef
+     _zzq_args[3] = (unsigned long int)(_zzq_arg3);                \
+     _zzq_args[4] = (unsigned long int)(_zzq_arg4);                \
+     _zzq_args[5] = (unsigned long int)(_zzq_arg5);                \
++    _zzq_args[6] = (unsigned long int)(_zzq_arg6);                \
+     _zzq_ptr = _zzq_args;                                         \
+     __asm__ volatile("mr 3,%1\n\t" /*default*/                    \
+                      "mr 4,%2\n\t" /*ptr*/                        \
+@@ -627,10 +642,11 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+                                                                   \
+   __extension__                                                   \
+-  ({         unsigned long int  _zzq_args[6];                     \
++  ({         unsigned long int  _zzq_args[7];                     \
+              unsigned long int  _zzq_result;                      \
+              unsigned long int* _zzq_ptr;                         \
+     _zzq_args[0] = (unsigned long int)(_zzq_request);             \
+@@ -639,6 +655,7 @@ typedef
+     _zzq_args[3] = (unsigned long int)(_zzq_arg3);                \
+     _zzq_args[4] = (unsigned long int)(_zzq_arg4);                \
+     _zzq_args[5] = (unsigned long int)(_zzq_arg5);                \
++    _zzq_args[6] = (unsigned long int)(_zzq_arg6);                \
+     _zzq_ptr = _zzq_args;                                         \
+     __asm__ volatile("mr 3,%1\n\t" /*default*/                    \
+                      "mr 4,%2\n\t" /*ptr*/                        \
+@@ -705,10 +722,11 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+                                                                   \
+   __extension__                                                   \
+-  ({volatile unsigned int  _zzq_args[6];                          \
++  ({volatile unsigned int  _zzq_args[7];                          \
+     volatile unsigned int  _zzq_result;                           \
+     _zzq_args[0] = (unsigned int)(_zzq_request);                  \
+     _zzq_args[1] = (unsigned int)(_zzq_arg1);                     \
+@@ -716,6 +734,7 @@ typedef
+     _zzq_args[3] = (unsigned int)(_zzq_arg3);                     \
+     _zzq_args[4] = (unsigned int)(_zzq_arg4);                     \
+     _zzq_args[5] = (unsigned int)(_zzq_arg5);                     \
++    _zzq_args[6] = (unsigned int)(_zzq_arg6);                     \
+     __asm__ volatile("mov r3, %1\n\t" /*default*/                 \
+                      "mov r4, %2\n\t" /*ptr*/                     \
+                      __SPECIAL_INSTRUCTION_PREAMBLE               \
+@@ -773,10 +792,11 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+         _zzq_default, _zzq_request,                               \
+-        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++        _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++        _zzq_arg6)                                                \
+                                                                   \
+   __extension__                                                   \
+-  ({volatile unsigned long int  _zzq_args[6];                     \
++  ({volatile unsigned long int  _zzq_args[7];                     \
+     volatile unsigned long int  _zzq_result;                      \
+     _zzq_args[0] = (unsigned long int)(_zzq_request);             \
+     _zzq_args[1] = (unsigned long int)(_zzq_arg1);                \
+@@ -784,6 +804,7 @@ typedef
+     _zzq_args[3] = (unsigned long int)(_zzq_arg3);                \
+     _zzq_args[4] = (unsigned long int)(_zzq_arg4);                \
+     _zzq_args[5] = (unsigned long int)(_zzq_arg5);                \
++    _zzq_args[6] = (unsigned long int)(_zzq_arg6);                \
+     __asm__ volatile("mov x3, %1\n\t" /*default*/                 \
+                      "mov x4, %2\n\t" /*ptr*/                     \
+                      __SPECIAL_INSTRUCTION_PREAMBLE               \
+@@ -853,9 +874,10 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                         \
+        _zzq_default, _zzq_request,                               \
+-       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)    \
++       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,    \
++       _zzq_arg6)                                                \
+   __extension__                                                  \
+- ({volatile unsigned long int _zzq_args[6];                      \
++ ({volatile unsigned long int _zzq_args[7];                      \
+    volatile unsigned long int _zzq_result;                       \
+    _zzq_args[0] = (unsigned long int)(_zzq_request);             \
+    _zzq_args[1] = (unsigned long int)(_zzq_arg1);                \
+@@ -863,6 +885,7 @@ typedef
+    _zzq_args[3] = (unsigned long int)(_zzq_arg3);                \
+    _zzq_args[4] = (unsigned long int)(_zzq_arg4);                \
+    _zzq_args[5] = (unsigned long int)(_zzq_arg5);                \
++   _zzq_args[6] = (unsigned long int)(_zzq_arg6);                \
+    __asm__ volatile(/* r2 = args */                              \
+                     "lgr 2,%1\n\t"                               \
+                     /* r3 = default */                           \
+@@ -925,9 +948,10 @@ typedef
+                     
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                          \
+        _zzq_default, _zzq_request,                                \
+-       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)     \
++       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,     \
++       _zzq_arg6)                                                 \
+   __extension__                                                   \
+-  ({ volatile unsigned int _zzq_args[6];                          \
++  ({ volatile unsigned int _zzq_args[7];                          \
+     volatile unsigned int _zzq_result;                            \
+     _zzq_args[0] = (unsigned int)(_zzq_request);                  \
+     _zzq_args[1] = (unsigned int)(_zzq_arg1);                     \
+@@ -935,6 +959,7 @@ typedef
+     _zzq_args[3] = (unsigned int)(_zzq_arg3);                     \
+     _zzq_args[4] = (unsigned int)(_zzq_arg4);                     \
+     _zzq_args[5] = (unsigned int)(_zzq_arg5);                     \
++    _zzq_args[6] = (unsigned int)(_zzq_arg6);                     \
+         __asm__ volatile("move $11, %1\n\t" /*default*/           \
+                      "move $12, %2\n\t" /*ptr*/                   \
+                      __SPECIAL_INSTRUCTION_PREAMBLE               \
+@@ -996,9 +1021,10 @@ typedef
+ 
+ #define VALGRIND_DO_CLIENT_REQUEST_EXPR(                            \
+        _zzq_default, _zzq_request,                                  \
+-       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5)       \
++       _zzq_arg1, _zzq_arg2, _zzq_arg3, _zzq_arg4, _zzq_arg5,       \
++       _zzq_arg6)                                                   \
+   __extension__                                                     \
+-  ({ volatile unsigned long int _zzq_args[6];                       \
++  ({ volatile unsigned long int _zzq_args[7];                       \
+     volatile unsigned long int _zzq_result;                         \
+     _zzq_args[0] = (unsigned long int)(_zzq_request);               \
+     _zzq_args[1] = (unsigned long int)(_zzq_arg1);                  \
+@@ -1006,6 +1032,7 @@ typedef
+     _zzq_args[3] = (unsigned long int)(_zzq_arg3);                  \
+     _zzq_args[4] = (unsigned long int)(_zzq_arg4);                  \
+     _zzq_args[5] = (unsigned long int)(_zzq_arg5);                  \
++    _zzq_args[6] = (unsigned long int)(_zzq_arg6);                  \
+         __asm__ volatile("move $11, %1\n\t" /*default*/             \
+                          "move $12, %2\n\t" /*ptr*/                 \
+                          __SPECIAL_INSTRUCTION_PREAMBLE             \
+@@ -6196,7 +6223,8 @@ typedef
+           /* Used by Inner Valgrind to inform Outer Valgrind where to
+              find the list of inner guest threads */
+           VG_USERREQ__INNER_THREADS    = 0x1902,
+-          VG_USERREQ__CLIENT_CALL4     = 0x1105
++          VG_USERREQ__CLIENT_CALL4     = 0x1105,
++          VG_USERREQ__CLIENT_CALL5     = 0x1106
+    } Vg_ClientRequest;
+ 
+ #if !defined(__GNUC__)
+@@ -6211,7 +6239,7 @@ typedef
+ #define RUNNING_ON_VALGRIND                                           \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* if not */,         \
+                                     VG_USERREQ__RUNNING_ON_VALGRIND,  \
+-                                    0, 0, 0, 0, 0)                    \
++                                    0, 0, 0, 0, 0, 0)                    \
+ 
+ 
+ /* Discard translation of code in the range [_qzz_addr .. _qzz_addr +
+@@ -6220,7 +6248,7 @@ typedef
+    invalidated area.  Returns no value. */
+ #define VALGRIND_DISCARD_TRANSLATIONS(_qzz_addr,_qzz_len)              \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DISCARD_TRANSLATIONS,  \
+-                                    _qzz_addr, _qzz_len, 0, 0, 0)
++                                    _qzz_addr, _qzz_len, 0, 0, 0, 0)
+ 
+ #define VALGRIND_INNER_THREADS(_qzz_addr)                               \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__INNER_THREADS,           \
+@@ -6260,13 +6288,13 @@ VALGRIND_PRINTF(const char *format, ...)
+                               VG_USERREQ__PRINTF_VALIST_BY_REF,
+                               (uintptr_t)format,
+                               (uintptr_t)&vargs,
+-                              0, 0, 0);
++                              0, 0, 0, 0);
+ #else
+    _qzz_res = VALGRIND_DO_CLIENT_REQUEST_EXPR(0,
+                               VG_USERREQ__PRINTF_VALIST_BY_REF,
+                               (unsigned long)format,
+                               (unsigned long)&vargs, 
+-                              0, 0, 0);
++                              0, 0, 0, 0);
+ #endif
+    va_end(vargs);
+    return (int)_qzz_res;
+@@ -6299,13 +6327,13 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+                               VG_USERREQ__PRINTF_BACKTRACE_VALIST_BY_REF,
+                               (uintptr_t)format,
+                               (uintptr_t)&vargs,
+-                              0, 0, 0);
++                              0, 0, 0, 0);
+ #else
+    _qzz_res = VALGRIND_DO_CLIENT_REQUEST_EXPR(0,
+                               VG_USERREQ__PRINTF_BACKTRACE_VALIST_BY_REF,
+                               (unsigned long)format,
+                               (unsigned long)&vargs, 
+-                              0, 0, 0);
++                              0, 0, 0, 0);
+ #endif
+    va_end(vargs);
+    return (int)_qzz_res;
+@@ -6340,26 +6368,26 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,       \
+                                     VG_USERREQ__CLIENT_CALL0,     \
+                                     _qyy_fn,                      \
+-                                    0, 0, 0, 0)
++                                    0, 0, 0, 0, 0)
+ 
+ #define VALGRIND_NON_SIMD_CALL1(_qyy_fn, _qyy_arg1)                    \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,            \
+                                     VG_USERREQ__CLIENT_CALL1,          \
+                                     _qyy_fn,                           \
+-                                    _qyy_arg1, 0, 0, 0)
++                                    _qyy_arg1, 0, 0, 0, 0)
+ 
+ #define VALGRIND_NON_SIMD_CALL2(_qyy_fn, _qyy_arg1, _qyy_arg2)         \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,            \
+                                     VG_USERREQ__CLIENT_CALL2,          \
+                                     _qyy_fn,                           \
+-                                    _qyy_arg1, _qyy_arg2, 0, 0)
++                                    _qyy_arg1, _qyy_arg2, 0, 0, 0)
+ 
+ #define VALGRIND_NON_SIMD_CALL3(_qyy_fn, _qyy_arg1, _qyy_arg2, _qyy_arg3) \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,             \
+                                     VG_USERREQ__CLIENT_CALL3,           \
+                                     _qyy_fn,                            \
+                                     _qyy_arg1, _qyy_arg2,               \
+-                                    _qyy_arg3, 0)
++                                    _qyy_arg3, 0, 0)
+ 
+ #define VALGRIND_NON_SIMD_CALL4(_qyy_fn, _qyy_arg1, _qyy_arg2, _qyy_arg3, \
+         _qyy_arg4) \
+@@ -6367,7 +6395,16 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+                                     VG_USERREQ__CLIENT_CALL4,           \
+                                     _qyy_fn,                            \
+                                     _qyy_arg1, _qyy_arg2,               \
+-                                    _qyy_arg3, _qyy_arg4)
++                                    _qyy_arg3, _qyy_arg4, 0)
++
++#define VALGRIND_NON_SIMD_CALL5(_qyy_fn, _qyy_arg1, _qyy_arg2, _qyy_arg3, \
++        _qyy_arg4, _qyy_arg5) \
++    VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,             \
++                                    VG_USERREQ__CLIENT_CALL5,           \
++                                    _qyy_fn,                            \
++                                    _qyy_arg1, _qyy_arg2,               \
++                                    _qyy_arg3, _qyy_arg4,               \
++                                    _qyy_arg5)
+ 
+ 
+ /* Counts the number of errors that have been recorded by a tool.  Nb:
+@@ -6377,7 +6414,7 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(                    \
+                                0 /* default return */,            \
+                                VG_USERREQ__COUNT_ERRORS,          \
+-                               0, 0, 0, 0, 0)
++                               0, 0, 0, 0, 0, 0)
+ 
+ /* Several Valgrind tools (Memcheck, Massif, Helgrind, DRD) rely on knowing
+    when heap blocks are allocated in order to give accurate results.  This
+@@ -6482,26 +6519,26 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+ */
+ #define VALGRIND_MALLOCLIKE_BLOCK(addr, sizeB, rzB, is_zeroed)          \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MALLOCLIKE_BLOCK,       \
+-                                    addr, sizeB, rzB, is_zeroed, 0)
++                                    addr, sizeB, rzB, is_zeroed, 0, 0)
+ 
+ /* See the comment for VALGRIND_MALLOCLIKE_BLOCK for details.
+    Ignored if addr == 0.
+ */
+ #define VALGRIND_RESIZEINPLACE_BLOCK(addr, oldSizeB, newSizeB, rzB)     \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__RESIZEINPLACE_BLOCK,    \
+-                                    addr, oldSizeB, newSizeB, rzB, 0)
++                                    addr, oldSizeB, newSizeB, rzB, 0, 0)
+ 
+ /* See the comment for VALGRIND_MALLOCLIKE_BLOCK for details.
+    Ignored if addr == 0.
+ */
+ #define VALGRIND_FREELIKE_BLOCK(addr, rzB)                              \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__FREELIKE_BLOCK,         \
+-                                    addr, rzB, 0, 0, 0)
++                                    addr, rzB, 0, 0, 0, 0)
+ 
+ /* Create a memory pool. */
+ #define VALGRIND_CREATE_MEMPOOL(pool, rzB, is_zeroed)             \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__CREATE_MEMPOOL,   \
+-                                    pool, rzB, is_zeroed, 0, 0)
++                                    pool, rzB, is_zeroed, 0, 0, 0)
+ 
+ /* Create a memory pool with some flags specifying extended behaviour.
+    When flags is zero, the behaviour is identical to VALGRIND_CREATE_MEMPOOL.
+@@ -6533,43 +6570,43 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+ #define VALGRIND_MEMPOOL_METAPOOL   2
+ #define VALGRIND_CREATE_MEMPOOL_EXT(pool, rzB, is_zeroed, flags)        \
+    VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__CREATE_MEMPOOL,          \
+-                                   pool, rzB, is_zeroed, flags, 0)
++                                   pool, rzB, is_zeroed, flags, 0, 0)
+ 
+ /* Destroy a memory pool. */
+ #define VALGRIND_DESTROY_MEMPOOL(pool)                            \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DESTROY_MEMPOOL,  \
+-                                    pool, 0, 0, 0, 0)
++                                    pool, 0, 0, 0, 0, 0)
+ 
+ /* Associate a piece of memory with a memory pool. */
+ #define VALGRIND_MEMPOOL_ALLOC(pool, addr, size)                  \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MEMPOOL_ALLOC,    \
+-                                    pool, addr, size, 0, 0)
++                                    pool, addr, size, 0, 0, 0)
+ 
+ /* Disassociate a piece of memory from a memory pool. */
+ #define VALGRIND_MEMPOOL_FREE(pool, addr)                         \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MEMPOOL_FREE,     \
+-                                    pool, addr, 0, 0, 0)
++                                    pool, addr, 0, 0, 0, 0)
+ 
+ /* Disassociate any pieces outside a particular range. */
+ #define VALGRIND_MEMPOOL_TRIM(pool, addr, size)                   \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MEMPOOL_TRIM,     \
+-                                    pool, addr, size, 0, 0)
++                                    pool, addr, size, 0, 0, 0)
+ 
+ /* Resize and/or move a piece associated with a memory pool. */
+ #define VALGRIND_MOVE_MEMPOOL(poolA, poolB)                       \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MOVE_MEMPOOL,     \
+-                                    poolA, poolB, 0, 0, 0)
++                                    poolA, poolB, 0, 0, 0, 0)
+ 
+ /* Resize and/or move a piece associated with a memory pool. */
+ #define VALGRIND_MEMPOOL_CHANGE(pool, addrA, addrB, size)         \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__MEMPOOL_CHANGE,   \
+-                                    pool, addrA, addrB, size, 0)
++                                    pool, addrA, addrB, size, 0, 0)
+ 
+ /* Return 1 if a mempool exists, else 0. */
+ #define VALGRIND_MEMPOOL_EXISTS(pool)                             \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                  \
+                                VG_USERREQ__MEMPOOL_EXISTS,        \
+-                               pool, 0, 0, 0, 0)
++                               pool, 0, 0, 0, 0, 0)
+ 
+ /* Mark a piece of memory as being a stack. Returns a stack id.
+    start is the lowest addressable stack byte, end is the highest
+@@ -6577,25 +6614,25 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+ #define VALGRIND_STACK_REGISTER(start, end)                       \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                  \
+                                VG_USERREQ__STACK_REGISTER,        \
+-                               start, end, 0, 0, 0)
++                               start, end, 0, 0, 0, 0)
+ 
+ /* Unmark the piece of memory associated with a stack id as being a
+    stack. */
+ #define VALGRIND_STACK_DEREGISTER(id)                             \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__STACK_DEREGISTER, \
+-                                    id, 0, 0, 0, 0)
++                                    id, 0, 0, 0, 0, 0)
+ 
+ /* Change the start and end address of the stack id.
+    start is the new lowest addressable stack byte, end is the new highest
+    addressable stack byte. */
+ #define VALGRIND_STACK_CHANGE(id, start, end)                     \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__STACK_CHANGE,     \
+-                                    id, start, end, 0, 0)
++                                    id, start, end, 0, 0, 0)
+ 
+ /* Load PDB debug info for Wine PE image_map. */
+ #define VALGRIND_LOAD_PDB_DEBUGINFO(fd, ptr, total_size, delta)     \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__LOAD_PDB_DEBUGINFO, \
+-                                    fd, ptr, total_size, delta, 0)
++                                    fd, ptr, total_size, delta, 0, 0)
+ 
+ /* Map a code address to a source file name and line number.  buf64
+    must point to a 64-byte buffer in the caller's address space.  The
+@@ -6604,7 +6641,7 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+ #define VALGRIND_MAP_IP_TO_SRCLOC(addr, buf64)                    \
+     (unsigned)VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                  \
+                                VG_USERREQ__MAP_IP_TO_SRCLOC,      \
+-                               addr, buf64, 0, 0, 0)
++                               addr, buf64, 0, 0, 0, 0)
+ 
+ /* Disable error reporting for this thread.  Behaves in a stack like
+    way, so you can safely call this multiple times provided that
+@@ -6616,13 +6653,13 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+    parents -- they are always created with reporting enabled. */
+ #define VALGRIND_DISABLE_ERROR_REPORTING                                \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__CHANGE_ERR_DISABLEMENT, \
+-                                    1, 0, 0, 0, 0)
++                                    1, 0, 0, 0, 0, 0)
+ 
+ /* Re-enable error reporting, as per comments on
+    VALGRIND_DISABLE_ERROR_REPORTING. */
+ #define VALGRIND_ENABLE_ERROR_REPORTING                                 \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__CHANGE_ERR_DISABLEMENT, \
+-                                    -1, 0, 0, 0, 0)
++                                    -1, 0, 0, 0, 0, 0)
+ 
+ /* Execute a monitor command from the client program.
+    If a connection is opened with GDB, the output will be sent
+@@ -6631,7 +6668,7 @@ VALGRIND_PRINTF_BACKTRACE(const char *fo
+    Returns 1 if command not recognised, 0 otherwise. */
+ #define VALGRIND_MONITOR_COMMAND(command)                               \
+    VALGRIND_DO_CLIENT_REQUEST_EXPR(0, VG_USERREQ__GDB_MONITOR_COMMAND, \
+-                                   command, 0, 0, 0, 0)
++                                   command, 0, 0, 0, 0, 0)
+ 
+ 
+ #undef PLAT_x86_darwin
+--- a/memcheck/mc_replace_strmem.c
++++ b/memcheck/mc_replace_strmem.c
+@@ -43,6 +43,6 @@
+ #define RECORD_OVERLAP_ERROR(s, src, dst, len)                  \
+   VALGRIND_DO_CLIENT_REQUEST_STMT(                              \
+                   _VG_USERREQ__MEMCHECK_RECORD_OVERLAP_ERROR,   \
+-                  s, src, dst, len, 0)
++                  s, src, dst, len, 0, 0)
+ 
+ #include "../shared/vg_replace_strmem.c"
+--- a/memcheck/memcheck.h
++++ b/memcheck/memcheck.h
+@@ -112,21 +112,21 @@ typedef
+ #define VALGRIND_MAKE_MEM_NOACCESS(_qzz_addr,_qzz_len)           \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,      \
+                             VG_USERREQ__MAKE_MEM_NOACCESS,       \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+       
+ /* Similarly, mark memory at _qzz_addr as addressable but undefined
+    for _qzz_len bytes. */
+ #define VALGRIND_MAKE_MEM_UNDEFINED(_qzz_addr,_qzz_len)          \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,      \
+                             VG_USERREQ__MAKE_MEM_UNDEFINED,      \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ /* Similarly, mark memory at _qzz_addr as addressable and defined
+    for _qzz_len bytes. */
+ #define VALGRIND_MAKE_MEM_DEFINED(_qzz_addr,_qzz_len)            \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,      \
+                             VG_USERREQ__MAKE_MEM_DEFINED,        \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ /* Similar to VALGRIND_MAKE_MEM_DEFINED except that addressability is
+    not altered: bytes which are addressable are marked as defined,
+@@ -134,7 +134,7 @@ typedef
+ #define VALGRIND_MAKE_MEM_DEFINED_IF_ADDRESSABLE(_qzz_addr,_qzz_len)     \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,              \
+                             VG_USERREQ__MAKE_MEM_DEFINED_IF_ADDRESSABLE, \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ /* Create a block-description handle.  The description is an ascii
+    string which is included in any messages pertaining to addresses
+@@ -144,14 +144,14 @@ typedef
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,        \
+                             VG_USERREQ__CREATE_BLOCK,              \
+                             (_qzz_addr), (_qzz_len), (_qzz_desc),  \
+-                            0, 0)
++                            0, 0, 0)
+ 
+ /* Discard a block-description-handle. Returns 1 for an
+    invalid handle, 0 for a valid handle. */
+ #define VALGRIND_DISCARD(_qzz_blkindex)                          \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,      \
+                             VG_USERREQ__DISCARD,                 \
+-                            0, (_qzz_blkindex), 0, 0, 0)
++                            0, (_qzz_blkindex), 0, 0, 0, 0)
+ 
+ 
+ /* Client-code macros to check the state of memory. */
+@@ -163,7 +163,7 @@ typedef
+ #define VALGRIND_CHECK_MEM_IS_ADDRESSABLE(_qzz_addr,_qzz_len)      \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                             \
+                             VG_USERREQ__CHECK_MEM_IS_ADDRESSABLE,  \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ /* Check that memory at _qzz_addr is addressable and defined for
+    _qzz_len bytes.  If suitable addressibility and definedness are not
+@@ -172,7 +172,7 @@ typedef
+ #define VALGRIND_CHECK_MEM_IS_DEFINED(_qzz_addr,_qzz_len)        \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0,                           \
+                             VG_USERREQ__CHECK_MEM_IS_DEFINED,    \
+-                            (_qzz_addr), (_qzz_len), 0, 0, 0)
++                            (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ /* Use this macro to force the definedness and addressibility of an
+    lvalue to be checked.  If suitable addressibility and definedness
+@@ -188,26 +188,26 @@ typedef
+ /* Do a full memory leak check (like --leak-check=full) mid-execution. */
+ #define VALGRIND_DO_LEAK_CHECK                                   \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DO_LEAK_CHECK,   \
+-                                    0, 0, 0, 0, 0)
++                                    0, 0, 0, 0, 0, 0)
+ 
+ /* Same as VALGRIND_DO_LEAK_CHECK but only showing the entries for
+    which there was an increase in leaked bytes or leaked nr of blocks
+    since the previous leak search. */
+ #define VALGRIND_DO_ADDED_LEAK_CHECK                            \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DO_LEAK_CHECK,  \
+-                                    0, 1, 0, 0, 0)
++                                    0, 1, 0, 0, 0, 0)
+ 
+ /* Same as VALGRIND_DO_ADDED_LEAK_CHECK but showing entries with
+    increased or decreased leaked bytes/blocks since previous leak
+    search. */
+ #define VALGRIND_DO_CHANGED_LEAK_CHECK                          \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DO_LEAK_CHECK,  \
+-                                    0, 2, 0, 0, 0)
++                                    0, 2, 0, 0, 0, 0)
+ 
+ /* Do a summary memory leak check (like --leak-check=summary) mid-execution. */
+ #define VALGRIND_DO_QUICK_LEAK_CHECK                             \
+     VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__DO_LEAK_CHECK,   \
+-                                    1, 0, 0, 0, 0)
++                                    1, 0, 0, 0, 0, 0)
+ 
+ /* Return number of leaked, dubious, reachable and suppressed bytes found by
+    all previous leak checks.  They must be lvalues.  */
+@@ -224,7 +224,7 @@ typedef
+     VALGRIND_DO_CLIENT_REQUEST_STMT(                                     \
+                                VG_USERREQ__COUNT_LEAKS,                  \
+                                &_qzz_leaked, &_qzz_dubious,              \
+-                               &_qzz_reachable, &_qzz_suppressed, 0);    \
++                               &_qzz_reachable, &_qzz_suppressed, 0, 0); \
+     leaked     = _qzz_leaked;                                            \
+     dubious    = _qzz_dubious;                                           \
+     reachable  = _qzz_reachable;                                         \
+@@ -246,7 +246,7 @@ typedef
+     VALGRIND_DO_CLIENT_REQUEST_STMT(                                     \
+                                VG_USERREQ__COUNT_LEAK_BLOCKS,            \
+                                &_qzz_leaked, &_qzz_dubious,              \
+-                               &_qzz_reachable, &_qzz_suppressed, 0);    \
++                               &_qzz_reachable, &_qzz_suppressed, 0, 0); \
+     leaked     = _qzz_leaked;                                            \
+     dubious    = _qzz_dubious;                                           \
+     reachable  = _qzz_reachable;                                         \
+@@ -268,7 +268,7 @@ typedef
+                                     VG_USERREQ__GET_VBITS,      \
+                                     (const char*)(zza),         \
+                                     (char*)(zzvbits),           \
+-                                    (zznbytes), 0, 0)
++                                    (zznbytes), 0, 0, 0)
+ 
+ /* Set the validity data for addresses [zza..zza+zznbytes-1], copying it
+    from the provided zzvbits array.  Return values:
+@@ -284,19 +284,19 @@ typedef
+                                     VG_USERREQ__SET_VBITS,      \
+                                     (const char*)(zza),         \
+                                     (const char*)(zzvbits),     \
+-                                    (zznbytes), 0, 0 )
++                                    (zznbytes), 0, 0, 0 )
+ 
+ /* Disable and re-enable reporting of addressing errors in the
+    specified address range. */
+ #define VALGRIND_DISABLE_ADDR_ERROR_REPORTING_IN_RANGE(_qzz_addr,_qzz_len) \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,    \
+        VG_USERREQ__DISABLE_ADDR_ERROR_REPORTING_IN_RANGE,      \
+-       (_qzz_addr), (_qzz_len), 0, 0, 0)
++       (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ #define VALGRIND_ENABLE_ADDR_ERROR_REPORTING_IN_RANGE(_qzz_addr,_qzz_len) \
+     VALGRIND_DO_CLIENT_REQUEST_EXPR(0 /* default return */,    \
+        VG_USERREQ__ENABLE_ADDR_ERROR_REPORTING_IN_RANGE,       \
+-       (_qzz_addr), (_qzz_len), 0, 0, 0)
++       (_qzz_addr), (_qzz_len), 0, 0, 0, 0)
+ 
+ #endif
+ 
+--- a/memcheck/tests/vbit-test/valgrind.c
++++ b/memcheck/tests/vbit-test/valgrind.c
+@@ -98,7 +98,7 @@ valgrind_get_vbits(opnd_t *opnd)
+ void
+ valgrind_vex_init_for_iri(IRICB *cb)
+ {
+-   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__VEX_INIT_FOR_IRI, cb, 0,0,0,0);
++   VALGRIND_DO_CLIENT_REQUEST_STMT(VG_USERREQ__VEX_INIT_FOR_IRI, cb, 0,0,0,0,0);
+ }
+ 
+ 

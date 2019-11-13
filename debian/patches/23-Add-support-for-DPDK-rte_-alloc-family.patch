@@ -1,0 +1,1250 @@
+From: Luca Boccassi <DL-vyatta-help@att.com>
+Date: Tue, 3 Nov 2015 15:56:14 +0000
+Subject: Add support for DPDK rte_*alloc family
+
+Intel DPDK ships with a custom memory allocator, rte_malloc. Hijack
+those functions and redirect them to Valgrind's malloc wrappers.
+---
+ coregrind/m_mallocfree.c                      |  109 ++++++++++
+ coregrind/m_replacemalloc/vg_replace_malloc.c |  262 ++++++++++++++++++++++++++
+ coregrind/m_scheduler/scheduler.c             |    8 
+ coregrind/m_tooliface.c                       |   23 ++
+ coregrind/pub_core_replacemalloc.h            |   15 +
+ coregrind/pub_core_tooliface.h                |   15 +
+ drd/drd_malloc_wrappers.c                     |   79 +++++++
+ exp-dhat/dh_main.c                            |   88 ++++++++
+ exp-sgcheck/h_main.c                          |   71 +++++++
+ exp-sgcheck/h_main.h                          |   15 +
+ exp-sgcheck/pc_main.c                         |    8 
+ helgrind/hg_main.c                            |   87 ++++++++
+ include/pub_tool_mallocfree.h                 |   15 +
+ include/pub_tool_redir.h                      |    5 
+ include/pub_tool_tooliface.h                  |   15 +
+ massif/ms_main.c                              |   79 +++++++
+ memcheck/mc_include.h                         |   16 +
+ memcheck/mc_main.c                            |    8 
+ memcheck/mc_malloc_wrappers.c                 |   91 +++++++++
+ 19 files changed, 1009 insertions(+)
+
+--- a/coregrind/m_mallocfree.c
++++ b/coregrind/m_mallocfree.c
+@@ -2670,6 +2670,115 @@
+    return VG_(arena_perm_malloc) ( VG_AR_CORE, size, align );
+ }
+ 
++void* VG_(rte_malloc) ( const HChar* cc, const char *type, SizeT nbytes,
++        unsigned align )
++{
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return VG_(arena_memalign) ( VG_AR_CORE, cc, align, nbytes );
++}
++
++void* VG_(rte_calloc) ( const HChar* cc, const char *type, SizeT nmemb,
++        SizeT bytes_per_memb, unsigned align )
++{
++   SizeT  size;
++   void*  p;
++
++   size = nmemb * bytes_per_memb;
++   vg_assert(size >= nmemb && size >= bytes_per_memb);// check against overflow
++
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   p = VG_(arena_memalign) ( VG_AR_CORE, cc, align, size );
++
++   if (p != NULL)
++     VG_(memset)(p, 0, size);
++
++   return p;
++}
++
++void* VG_(rte_zmalloc) ( const HChar* cc, const char *type, SizeT n,
++        unsigned align )
++{
++   void*  p;
++
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   p = VG_(arena_memalign) ( VG_AR_CORE, cc, align, n );
++
++   if (p != NULL)
++     VG_(memset)(p, 0, n);
++
++   return p;
++}
++
++void* VG_(rte_realloc) ( const HChar* cc, void* ptr, SizeT size,
++        unsigned align )
++{
++   Arena* a;
++   SizeT  old_pszB;
++   void*  p_new;
++   Block* b;
++
++   ensure_mm_init(VG_AR_CORE);
++   a = arenaId_to_ArenaP(VG_AR_CORE);
++
++   vg_assert(size < MAX_PSZB);
++
++   if (NULL == ptr) {
++      return VG_(arena_memalign)(VG_AR_CORE, cc, align, size);
++   }
++
++   if (size == 0) {
++      VG_(arena_free)(VG_AR_CORE, ptr);
++      return NULL;
++   }
++
++   b = get_payload_block(a, ptr);
++   vg_assert(blockSane(a, b));
++
++   vg_assert(is_inuse_block(b));
++   old_pszB = get_pszB(a, b);
++
++   if (size <= old_pszB) {
++      return ptr;
++   }
++
++   p_new = VG_(arena_memalign) ( VG_AR_CORE, cc, align, size );
++
++   VG_(memcpy)(p_new, ptr, old_pszB);
++
++   VG_(arena_free)(VG_AR_CORE, ptr);
++
++   return p_new;
++}
++
++void* VG_(rte_malloc_socket) ( const HChar* cc, const char *type, SizeT nbytes,
++        unsigned align, int socket )
++{
++   return VG_(rte_malloc) ( cc, type, nbytes, align );
++}
++
++void* VG_(rte_calloc_socket) ( const HChar* cc, const char *type, SizeT nmemb,
++        SizeT bytes_per_memb, unsigned align, int socket )
++{
++   return VG_(rte_calloc) ( cc, type, nmemb, bytes_per_memb, align );
++}
++
++void* VG_(rte_zmalloc_socket) ( const HChar* cc, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return VG_(rte_zmalloc) ( cc, type, n, align );
++}
++
++void VG_(rte_free) ( void* ptr )
++{
++   VG_(arena_free) ( VG_AR_CORE, ptr );
++}
++
+ 
+ /*--------------------------------------------------------------------*/
+ /*--- end                                                          ---*/
+--- a/coregrind/m_replacemalloc/vg_replace_malloc.c
++++ b/coregrind/m_replacemalloc/vg_replace_malloc.c
+@@ -101,6 +101,14 @@
+    10260 ZONE_UNREGISTER
+    10270 ZONE_SET_NAME
+    10280 ZONE_GET_NAME
++   10300 RTE_MALLOC
++   10310 RTE_CALLOC
++   10320 RTE_ZMALLOC
++   10330 RTE_REALLOC
++   10340 RTE_MALLOC_SOCKET
++   10350 RTE_CALLOC_SOCKET
++   10360 RTE_ZMALLOC_SOCKET
++   10370 RTE_FREE
+ */
+ 
+ /* 2 Apr 05: the Portland Group compiler, which uses cfront/ARM style
+@@ -1145,6 +1153,260 @@
+ 
+ #endif
+ 
++/*---------------------- rte_malloc ----------------------*/
++
++/* Generate a replacement for 'fnname' in object 'soname', which calls
++   'vg_replacement' to allocate memory.  If that fails, return NULL.
++*/
++#define RTE_MALLOC(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10300,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align ); \
++   void* VG_REPLACE_FUNCTION_EZU(10300,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align ) \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      TRIGGER_MEMCHECK_ERROR_IF_UNDEFINED(n); \
++      MALLOC_TRACE("rte_malloc(%s,%llu,%u)", type, (ULong)n, align ); \
++      \
++      v = (void*)VALGRIND_NON_SIMD_CALL3( info.tl_rte_malloc, type, n, align ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++// rte_malloc
++RTE_MALLOC(VG_Z_DPDK_SONAME, rte_malloc);
++RTE_MALLOC(VG_Z_RTE_SONAME,  rte_malloc);
++RTE_MALLOC(VG_Z_RTE_EAL_SONAME,  rte_malloc);
++RTE_MALLOC(SO_SYN_MALLOC,    rte_malloc);
++
++
++/*---------------------- rte_calloc ----------------------*/
++
++#define RTE_CALLOC(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10310,soname,fnname) \
++            ( const char *type, SizeT nmemb, SizeT size, unsigned align ); \
++   void* VG_REPLACE_FUNCTION_EZU(10310,soname,fnname) \
++            ( const char *type, SizeT nmemb, SizeT size, unsigned align )  \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      MALLOC_TRACE("rte_calloc(%s,%llu,%llu,%u)", type, (ULong)nmemb, \
++              (ULong)size, align ); \
++      \
++      /* Protect against overflow.  See bug 24078. (that bug number is
++         invalid.  Which one really?) */ \
++      /* But don't use division, since that produces an external symbol
++         reference on ARM, in the form of a call to __aeabi_uidiv.  It's
++         normally OK, because ld.so manages to resolve it to something in the
++         executable, or one of its shared objects.  But that isn't guaranteed
++         to be the case, and it has been observed to fail in rare cases, eg:
++            echo x | valgrind /bin/sed -n "s/.*-\>\ //p"
++         So instead compute the high word of the product and check it is zero. */ \
++      if (umulHW(size, nmemb) != 0) return NULL; \
++      v = (void*)VALGRIND_NON_SIMD_CALL4( info.tl_rte_calloc, type, nmemb, size, \
++              align ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++RTE_CALLOC(VG_Z_DPDK_SONAME, rte_calloc);
++RTE_CALLOC(VG_Z_RTE_SONAME,  rte_calloc);
++RTE_CALLOC(VG_Z_RTE_EAL_SONAME,  rte_calloc);
++RTE_CALLOC(SO_SYN_MALLOC,    rte_calloc);
++
++
++/*---------------------- rte_zmalloc ----------------------*/
++
++#define RTE_ZMALLOC(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10320,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align ); \
++   void* VG_REPLACE_FUNCTION_EZU(10320,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align ) \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      TRIGGER_MEMCHECK_ERROR_IF_UNDEFINED(n); \
++      MALLOC_TRACE("rte_zmalloc(%s,%llu,%u)", type, (ULong)n, align ); \
++      \
++      v = (void*)VALGRIND_NON_SIMD_CALL3( info.tl_rte_zmalloc, type, n, align ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++// rte_zmalloc
++RTE_ZMALLOC(VG_Z_DPDK_SONAME, rte_zmalloc);
++RTE_ZMALLOC(VG_Z_RTE_SONAME,  rte_zmalloc);
++RTE_ZMALLOC(VG_Z_RTE_EAL_SONAME,  rte_zmalloc);
++RTE_ZMALLOC(SO_SYN_MALLOC,    rte_zmalloc);
++
++/*---------------------- rte_malloc_socket ----------------------*/
++
++/* Generate a replacement for 'fnname' in object 'soname', which calls
++   'vg_replacement' to allocate memory.  If that fails, return NULL.
++*/
++#define RTE_MALLOC_SOCKET(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10340,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align, int socket ); \
++   void* VG_REPLACE_FUNCTION_EZU(10340,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align, int socket ) \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      TRIGGER_MEMCHECK_ERROR_IF_UNDEFINED(n); \
++      MALLOC_TRACE("rte_malloc_socket(%s,%llu,%u,%d)", type, (ULong)n, align, \
++              socket ); \
++      \
++      v = (void*)VALGRIND_NON_SIMD_CALL4( info.tl_rte_malloc_socket, type, n, \
++              align, socket ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++// rte_malloc_socket
++RTE_MALLOC_SOCKET(VG_Z_DPDK_SONAME, rte_malloc_socket);
++RTE_MALLOC_SOCKET(VG_Z_RTE_SONAME,  rte_malloc_socket);
++RTE_MALLOC_SOCKET(VG_Z_RTE_EAL_SONAME,  rte_malloc_socket);
++RTE_MALLOC_SOCKET(SO_SYN_MALLOC,    rte_malloc_socket);
++
++
++/*---------------------- rte_calloc_socket ----------------------*/
++
++#define RTE_CALLOC_SOCKET(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10350,soname,fnname) \
++            ( const char *type, SizeT nmemb, SizeT size, unsigned align, \
++                    int socket ); \
++   void* VG_REPLACE_FUNCTION_EZU(10350,soname,fnname) \
++            ( const char *type, SizeT nmemb, SizeT size, unsigned align, \
++                    int socket )  \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      MALLOC_TRACE("rte_calloc_socket(%s,%llu,%llu,%u,%d)", type, (ULong)nmemb, \
++              (ULong)size, align, socket ); \
++      \
++      /* Protect against overflow.  See bug 24078. (that bug number is
++         invalid.  Which one really?) */ \
++      /* But don't use division, since that produces an external symbol
++         reference on ARM, in the form of a call to __aeabi_uidiv.  It's
++         normally OK, because ld.so manages to resolve it to something in the
++         executable, or one of its shared objects.  But that isn't guaranteed
++         to be the case, and it has been observed to fail in rare cases, eg:
++            echo x | valgrind /bin/sed -n "s/.*-\>\ //p"
++         So instead compute the high word of the product and check it is zero. */ \
++      if (umulHW(size, nmemb) != 0) return NULL; \
++      v = (void*)VALGRIND_NON_SIMD_CALL5( info.tl_rte_calloc_socket, type, \
++              nmemb, size, align, socket ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++RTE_CALLOC_SOCKET(VG_Z_DPDK_SONAME, rte_calloc_socket);
++RTE_CALLOC_SOCKET(VG_Z_RTE_SONAME,  rte_calloc_socket);
++RTE_CALLOC_SOCKET(VG_Z_RTE_EAL_SONAME,  rte_calloc_socket);
++RTE_CALLOC_SOCKET(SO_SYN_MALLOC,    rte_calloc_socket);
++
++
++/*---------------------- rte_zmalloc_socket ----------------------*/
++
++#define RTE_ZMALLOC_SOCKET(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10360,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align, int socket ); \
++   void* VG_REPLACE_FUNCTION_EZU(10360,soname,fnname) \
++            ( const char *type, SizeT n, unsigned align, int socket ) \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      TRIGGER_MEMCHECK_ERROR_IF_UNDEFINED(n); \
++      MALLOC_TRACE("rte_zmalloc_socket(%s,%llu,%u,%d)", type, (ULong)n, align, \
++              socket ); \
++      \
++      v = (void*)VALGRIND_NON_SIMD_CALL4( info.tl_rte_zmalloc_socket, type, n, \
++              align, socket ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++// rte_zmalloc_socket
++RTE_ZMALLOC_SOCKET(VG_Z_DPDK_SONAME, rte_zmalloc_socket);
++RTE_ZMALLOC_SOCKET(VG_Z_RTE_SONAME,  rte_zmalloc_socket);
++RTE_ZMALLOC_SOCKET(VG_Z_RTE_EAL_SONAME,  rte_zmalloc_socket);
++RTE_ZMALLOC_SOCKET(SO_SYN_MALLOC,    rte_zmalloc_socket);
++
++
++/*---------------------- rte_free ----------------------*/
++
++/* Generate a replacement for 'fnname' in object 'soname', which calls
++   'vg_replacement' to free previously allocated memory.
++*/
++
++#define RTE_FREE(soname, fnname) \
++   \
++   void VG_REPLACE_FUNCTION_EZU(10370,soname,fnname) (void *p); \
++   void VG_REPLACE_FUNCTION_EZU(10370,soname,fnname) (void *p)  \
++   { \
++      DO_INIT; \
++      MALLOC_TRACE(#fnname "(%p)\n", p ); \
++      if (p == NULL)  \
++         return; \
++      (void)VALGRIND_NON_SIMD_CALL1( info.tl_rte_free, p ); \
++   }
++
++// rte_free
++RTE_FREE(VG_Z_DPDK_SONAME,  rte_free );
++RTE_FREE(VG_Z_RTE_SONAME,   rte_free);
++RTE_FREE(VG_Z_RTE_EAL_SONAME,  rte_free);
++RTE_FREE(SO_SYN_MALLOC,     rte_free );
++
++
++/*---------------------- rte_realloc ----------------------*/
++
++#define RTE_REALLOC(soname, fnname) \
++   \
++   void* VG_REPLACE_FUNCTION_EZU(10330,soname,fnname) \
++            ( void* ptrV, SizeT new_size, unsigned align );\
++   void* VG_REPLACE_FUNCTION_EZU(10330,soname,fnname) \
++            ( void* ptrV, SizeT new_size, unsigned align ) \
++   { \
++      void* v; \
++      \
++      DO_INIT; \
++      MALLOC_TRACE("realloc(%p,%llu,%u)", ptrV, (ULong)new_size, \
++              align ); \
++      \
++      if (ptrV == NULL) \
++         /* We need to call a malloc-like function; so let's use \
++            one which we know exists. */ \
++         return VG_REPLACE_FUNCTION_EZU(10300,VG_Z_DPDK_SONAME,rte_malloc) \
++                   (NULL, new_size, align); \
++      if (new_size <= 0) { \
++         VG_REPLACE_FUNCTION_EZU(10370,VG_Z_DPDK_SONAME,rte_free)(ptrV); \
++         MALLOC_TRACE(" = 0\n"); \
++         return NULL; \
++      } \
++      v = (void*)VALGRIND_NON_SIMD_CALL3( info.tl_rte_realloc, ptrV, \
++              new_size, align ); \
++      MALLOC_TRACE(" = %p\n", v ); \
++      return v; \
++   }
++
++RTE_REALLOC(VG_Z_DPDK_SONAME, rte_realloc);
++RTE_REALLOC(VG_Z_RTE_SONAME,  rte_realloc);
++RTE_REALLOC(VG_Z_RTE_EAL_SONAME,  rte_realloc);
++RTE_REALLOC(SO_SYN_MALLOC,    rte_realloc);
++
+ 
+ /*------------------ Darwin zone stuff ------------------*/
+ 
+--- a/coregrind/m_scheduler/scheduler.c
++++ b/coregrind/m_scheduler/scheduler.c
+@@ -2006,6 +2006,14 @@
+ 	 info->tl___builtin_delete     = VG_(tdict).tool___builtin_delete;
+ 	 info->tl___builtin_vec_delete = VG_(tdict).tool___builtin_vec_delete;
+          info->tl_malloc_usable_size   = VG_(tdict).tool_malloc_usable_size;
++	 info->tl_rte_malloc           = VG_(tdict).tool_rte_malloc;
++	 info->tl_rte_calloc           = VG_(tdict).tool_rte_calloc;
++	 info->tl_rte_zmalloc          = VG_(tdict).tool_rte_zmalloc;
++	 info->tl_rte_realloc          = VG_(tdict).tool_rte_realloc;
++	 info->tl_rte_malloc_socket    = VG_(tdict).tool_rte_malloc_socket;
++	 info->tl_rte_calloc_socket    = VG_(tdict).tool_rte_calloc_socket;
++	 info->tl_rte_zmalloc_socket   = VG_(tdict).tool_rte_zmalloc_socket;
++	 info->tl_rte_free             = VG_(tdict).tool_rte_free;
+ 
+ 	 info->mallinfo                = VG_(mallinfo);
+ 	 info->clo_trace_malloc        = VG_(clo_trace_malloc);
+--- a/coregrind/m_tooliface.c
++++ b/coregrind/m_tooliface.c
+@@ -341,6 +341,21 @@
+    void  (*__builtin_vec_delete) ( ThreadId, void* ),
+    void* (*realloc)              ( ThreadId, void*, SizeT ),
+    SizeT (*malloc_usable_size)   ( ThreadId, void* ), 
++   void* (*rte_malloc)           ( ThreadId tid, const char *type, SizeT n,
++           unsigned align ),
++   void* (*rte_calloc)           ( ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align ),
++   void* (*rte_zmalloc)          ( ThreadId tid, const char *type, SizeT n,
++           unsigned align ),
++   void* (*rte_realloc)          ( ThreadId tid, void* p, SizeT new_size,
++           unsigned align ),
++   void* (*rte_malloc_socket)    ( ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket ),
++   void* (*rte_calloc_socket)    ( ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align, int socket ),
++   void* (*rte_zmalloc_socket)   ( ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket ),
++   void  (*rte_free)             ( ThreadId tid, void* p ),
+    SizeT client_malloc_redzone_szB
+ )
+ {
+@@ -355,6 +370,14 @@
+    VG_(tdict).tool___builtin_vec_delete = __builtin_vec_delete;
+    VG_(tdict).tool_realloc              = realloc;
+    VG_(tdict).tool_malloc_usable_size   = malloc_usable_size;
++   VG_(tdict).tool_rte_malloc           = rte_malloc;
++   VG_(tdict).tool_rte_calloc           = rte_calloc;
++   VG_(tdict).tool_rte_zmalloc          = rte_zmalloc;
++   VG_(tdict).tool_rte_realloc          = rte_realloc;
++   VG_(tdict).tool_rte_malloc_socket    = rte_malloc_socket;
++   VG_(tdict).tool_rte_calloc_socket    = rte_calloc_socket;
++   VG_(tdict).tool_rte_zmalloc_socket   = rte_zmalloc_socket;
++   VG_(tdict).tool_rte_free             = rte_free;
+    VG_(tdict).tool_client_redzone_szB   = client_malloc_redzone_szB;
+ }
+ 
+--- a/coregrind/pub_core_replacemalloc.h
++++ b/coregrind/pub_core_replacemalloc.h
+@@ -52,6 +52,21 @@
+    void* (*tl_realloc)             (ThreadId tid, void* p, SizeT size);
+    SizeT (*tl_malloc_usable_size)  (ThreadId tid, void* payload);
+    void  (*mallinfo)               (ThreadId tid, struct vg_mallinfo* mi);
++   void* (*tl_rte_malloc)          (ThreadId tid, const char *type, SizeT n,
++           unsigned align);
++   void* (*tl_rte_calloc)          (ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align);
++   void* (*tl_rte_zmalloc)         (ThreadId tid, const char *type, SizeT n,
++           unsigned align);
++   void* (*tl_rte_realloc)         (ThreadId tid, void* p, SizeT new_size,
++           unsigned align);
++   void* (*tl_rte_malloc_socket)   (ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket);
++   void* (*tl_rte_calloc_socket)   (ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align, int socket);
++   void* (*tl_rte_zmalloc_socket)  (ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket);
++   void  (*tl_rte_free)            (ThreadId tid, void* p);
+    Bool	clo_trace_malloc;
+ };
+ 
+--- a/coregrind/pub_core_tooliface.h
++++ b/coregrind/pub_core_tooliface.h
+@@ -169,6 +169,21 @@
+    void  (*tool___builtin_vec_delete)(ThreadId, void*);
+    void* (*tool_realloc)             (ThreadId, void*, SizeT);
+    SizeT (*tool_malloc_usable_size)  (ThreadId, void*);
++   void* (*tool_rte_malloc)          (ThreadId tid, const char *type,
++           SizeT n, unsigned align);
++   void* (*tool_rte_calloc)          (ThreadId tid, const char *type,
++           SizeT nmemb, SizeT size1, unsigned align);
++   void* (*tool_rte_zmalloc)         (ThreadId tid, const char *type,
++           SizeT n, unsigned align);
++   void* (*tool_rte_realloc)         (ThreadId tid, void* p,
++           SizeT new_size, unsigned align);
++   void* (*tool_rte_malloc_socket)   (ThreadId tid, const char *type,
++           SizeT n, unsigned align, int socket);
++   void* (*tool_rte_calloc_socket)   (ThreadId tid, const char *type,
++           SizeT nmemb, SizeT size1, unsigned align, int socket);
++   void* (*tool_rte_zmalloc_socket)  (ThreadId tid, const char *type,
++           SizeT n, unsigned align, int socket);
++   void  (*tool_rte_free)            (ThreadId tid, void* p);
+    SizeT tool_client_redzone_szB;
+ 
+    // VG_(needs).final_IR_tidy_pass
+--- a/drd/drd_malloc_wrappers.c
++++ b/drd/drd_malloc_wrappers.c
+@@ -294,6 +294,77 @@
+    return mc ? mc->size : 0;
+ }
+ 
++static void* drd_rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block(tid, n, align, /*is_zeroed*/False);
++}
++
++static void* drd_rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block(tid, nmemb*size1, align, /*is_zeroed*/True);
++}
++
++static void* drd_rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block(tid, n, align, /*is_zeroed*/True);
++}
++
++static void* drd_rte_realloc ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return renew_block(tid, p_old, new_szB, align);
++}
++
++static void* drd_rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return drd_rte_malloc ( tid, type, n, align );
++}
++
++static void* drd_rte_calloc_socket ( ThreadId tid, const char *type,
++        SizeT nmemb, SizeT size1, unsigned align, int socket )
++{
++   return drd_rte_calloc ( tid, type, nmemb, size1, align );
++}
++
++static void* drd_rte_zmalloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return drd_rte_zmalloc ( tid, type, n, align );
++}
++
++static void drd_rte_free ( ThreadId tid, void* p )
++{
++   drd_free ( tid, p );
++}
++
+ void DRD_(register_malloc_wrappers)(const StartUsingMem start_callback,
+                                     const StopUsingMem stop_callback)
+ {
+@@ -315,6 +386,14 @@
+                                  drd___builtin_vec_delete,
+                                  drd_realloc,
+                                  drd_malloc_usable_size,
++                                 drd_rte_malloc,
++                                 drd_rte_calloc,
++                                 drd_rte_zmalloc,
++                                 drd_rte_realloc,
++                                 drd_rte_malloc_socket,
++                                 drd_rte_calloc_socket,
++                                 drd_rte_zmalloc_socket,
++                                 drd_rte_free,
+                                  0);
+ }
+ 
+--- a/exp-dhat/dh_main.c
++++ b/exp-dhat/dh_main.c
+@@ -675,6 +675,86 @@
+    return bk ? bk->req_szB : 0;
+ }                                                            
+ 
++static void* dh_rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block( tid, NULL, n, align, False );
++}
++
++static void* dh_rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block( tid, NULL, nmemb*size1, align, True );
++}
++
++static void* dh_rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return new_block( tid, NULL, n, align, True );
++}
++
++static void* dh_rte_realloc ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   if (p_old == NULL) {
++      return new_block( tid, NULL, new_szB, align, False );
++   }
++
++   if (new_szB == 0) {
++      dh_free(tid, p_old);
++      return NULL;
++   }
++
++   return renew_block(tid, p_old, new_szB, align);
++}
++
++static void* dh_rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return dh_rte_malloc ( tid, type, n, align );
++}
++
++static void* dh_rte_calloc_socket ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket )
++{
++   return dh_rte_calloc ( tid, type, nmemb, size1, align );
++}
++
++static void* dh_rte_zmalloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return dh_rte_zmalloc ( tid, type, n, align );
++}
++
++static void dh_rte_free ( ThreadId tid, void* p )
++{
++   dh_free ( tid, p );
++}
++
+ 
+ //------------------------------------------------------------//
+ //--- memory references                                    ---//
+@@ -1384,6 +1464,14 @@
+                                    dh___builtin_vec_delete,
+                                    dh_realloc,
+                                    dh_malloc_usable_size,
++                                   dh_rte_malloc,
++                                   dh_rte_calloc,
++                                   dh_rte_zmalloc,
++                                   dh_rte_realloc,
++                                   dh_rte_malloc_socket,
++                                   dh_rte_calloc_socket,
++                                   dh_rte_zmalloc_socket,
++                                   dh_rte_free,
+                                    0 );
+ 
+    VG_(track_pre_mem_read)        ( dh_handle_noninsn_read );
+--- a/exp-sgcheck/h_main.c
++++ b/exp-sgcheck/h_main.c
+@@ -463,6 +463,77 @@
+    return ( seg ? seg->szB : 0 );
+ }
+ 
++void* h_replace_rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_new_mem_heap ( tid, n, align, /*is_zeroed*/False );
++}
++
++void* h_replace_rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_new_mem_heap ( tid, nmemb*size1, align, /*is_zeroed*/True );
++}
++
++void* h_replace_rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_new_mem_heap ( tid, n, align, /*is_zeroed*/True );
++}
++
++void* h_replace_rte_realloc ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return renew_block(tid, p_old, new_szB, align);
++}
++
++void* h_replace_rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return h_replace_rte_malloc ( tid, type, n, align );
++}
++
++void* h_replace_rte_calloc_socket ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket )
++{
++   return h_replace_rte_calloc ( tid, type, nmemb, size1, align );
++}
++
++void* h_replace_rte_zmalloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return h_replace_rte_zmalloc ( tid, type, n, align );
++}
++
++void h_replace_rte_free ( ThreadId tid, void* p )
++{
++   h_replace_free ( tid, p );
++}
++
+ 
+ /*--------------------------------------------------------------------*/
+ /*--- Instrumentation                                              ---*/
+--- a/exp-sgcheck/h_main.h
++++ b/exp-sgcheck/h_main.h
+@@ -66,6 +66,21 @@
+ void  h_replace___builtin_vec_delete ( ThreadId tid, void* p );
+ void* h_replace_realloc ( ThreadId tid, void* p_old, SizeT new_size );
+ SizeT h_replace_malloc_usable_size ( ThreadId tid, void* p );
++void* h_replace_rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align );
++void* h_replace_rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align );
++void* h_replace_rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align );
++void* h_replace_rte_realloc ( ThreadId tid, void* p, SizeT new_size,
++        unsigned align );
++void* h_replace_rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket );
++void* h_replace_rte_calloc_socket ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket );
++void* h_replace_rte_zmalloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket );
++void  h_replace_rte_free ( ThreadId tid, void* p );
+ 
+ /* Note that this also does the sg_ instrumentation. */
+ IRSB* h_instrument ( VgCallbackClosure* closure,
+--- a/exp-sgcheck/pc_main.c
++++ b/exp-sgcheck/pc_main.c
+@@ -103,6 +103,14 @@
+                                   h_replace___builtin_vec_delete,
+                                   h_replace_realloc,
+                                   h_replace_malloc_usable_size,
++                                  h_replace_rte_malloc,
++                                  h_replace_rte_calloc,
++                                  h_replace_rte_zmalloc,
++                                  h_replace_rte_realloc,
++                                  h_replace_rte_malloc_socket,
++                                  h_replace_rte_calloc_socket,
++                                  h_replace_rte_zmalloc_socket,
++                                  h_replace_rte_free,
+                                   0 /* no need for client heap redzones */ );
+ 
+    VG_(needs_var_info)          ();
+--- a/helgrind/hg_main.c
++++ b/helgrind/hg_main.c
+@@ -4398,6 +4398,85 @@
+    return True;
+ }
+ 
++static void* hg_cli__rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   if (((SSizeT)n) < 0) return NULL;
++
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return handle_alloc ( tid, n, align, /*is_zeroed*/False );
++}
++
++static void* hg_cli__rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   if ( ((SSizeT)nmemb) < 0 || ((SSizeT)size1) < 0 ) return NULL;
++
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return handle_alloc ( tid, nmemb*size1, align, /*is_zeroed*/True );
++}
++
++static void* hg_cli__rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   if (((SSizeT)n) < 0) return NULL;
++
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return handle_alloc ( tid, n, align, /*is_zeroed*/True );
++}
++
++static void* hg_cli__rte_realloc ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   if (((SSizeT)new_szB) < 0) return NULL;
++
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return handle_realloc ( tid, p_old, new_szB, align );
++}
++
++static void* hg_cli__rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return hg_cli__rte_malloc ( tid, type, n, align );
++}
++
++static void* hg_cli__rte_calloc_socket ( ThreadId tid, const char *type,
++        SizeT nmemb, SizeT size1, unsigned align, int socket )
++{
++   return hg_cli__rte_calloc ( tid, type, nmemb, size1, align );
++}
++
++static void* hg_cli__rte_zmalloc_socket ( ThreadId tid, const char *type,
++        SizeT n, unsigned align, int socket )
++{
++   return hg_cli__rte_zmalloc ( tid, type, n, align );
++}
++
++static void hg_cli__rte_free ( ThreadId tid, void* p )
++{
++   hg_cli__free ( tid, p );
++}
++
+ 
+ /*--------------------------------------------------------------*/
+ /*--- Instrumentation                                        ---*/
+@@ -5880,6 +5959,14 @@
+                                    hg_cli____builtin_vec_delete,
+                                    hg_cli__realloc,
+                                    hg_cli_malloc_usable_size,
++                                   hg_cli__rte_malloc,
++                                   hg_cli__rte_calloc,
++                                   hg_cli__rte_zmalloc,
++                                   hg_cli__rte_realloc,
++                                   hg_cli__rte_malloc_socket,
++                                   hg_cli__rte_calloc_socket,
++                                   hg_cli__rte_zmalloc_socket,
++                                   hg_cli__rte_free,
+                                    HG_CLI__DEFAULT_MALLOC_REDZONE_SZB );
+ 
+    /* 21 Dec 08: disabled this; it mostly causes H to start more
+--- a/include/pub_tool_mallocfree.h
++++ b/include/pub_tool_mallocfree.h
+@@ -45,6 +45,21 @@
+ extern void*  VG_(realloc)       ( const HChar* cc, void* p, SizeT size );
+ extern void   VG_(realloc_shrink)( void* ptr, SizeT size );
+ extern HChar* VG_(strdup)        ( const HChar* cc, const HChar* s );
++extern void* VG_(rte_malloc)     ( const HChar* cc, const char *type,
++        SizeT nbytes, unsigned align );
++extern void* VG_(rte_calloc)     ( const HChar* cc, const char *type,
++        SizeT nmemb, SizeT bytes_per_memb, unsigned align );
++extern void* VG_(rte_zmalloc)    ( const HChar* cc, const char *type, SizeT n,
++        unsigned align );
++extern void* VG_(rte_realloc)    ( const HChar* cc, void* ptr, SizeT size,
++        unsigned align );
++extern void* VG_(rte_malloc_socket) ( const HChar* cc, const char *type,
++        SizeT nbytes, unsigned align, int socket );
++extern void* VG_(rte_calloc_socket) ( const HChar* cc, const char *type,
++        SizeT nmemb, SizeT bytes_per_memb, unsigned align, int socket );
++extern void* VG_(rte_zmalloc_socket) ( const HChar* cc, const char *type,
++        SizeT n, unsigned align, int socket );
++extern void VG_(rte_free)        ( void* ptr );
+ 
+ // TODO: move somewhere else
+ // Call here to bomb the system when out of memory (mmap anon fails)
+--- a/include/pub_tool_redir.h
++++ b/include/pub_tool_redir.h
+@@ -362,6 +362,11 @@
+ 
+ Bool VG_(is_soname_ld_so) (const HChar *soname);
+ 
++// Prefixes for Intel DPDK libraries, first wildcard matches architecture
++#define VG_Z_DPDK_SONAME  libZadpdkZdsoZa     // lib*dpdk.so*
++#define VG_Z_RTE_SONAME   librteZumallocZdsoZa  // librte_malloc.so*
++#define VG_Z_RTE_EAL_SONAME   librteZuealZdsoZa  // librte_eal.so*
++
+ #endif   // __PUB_TOOL_REDIR_H
+ 
+ /*--------------------------------------------------------------------*/
+--- a/include/pub_tool_tooliface.h
++++ b/include/pub_tool_tooliface.h
+@@ -484,6 +484,21 @@
+    void  (*p__builtin_vec_delete) ( ThreadId tid, void* p ),
+    void* (*prealloc)              ( ThreadId tid, void* p, SizeT new_size ),
+    SizeT (*pmalloc_usable_size)   ( ThreadId tid, void* p), 
++   void* (*prte_malloc)           ( ThreadId tid, const char *type, SizeT n,
++           unsigned align ),
++   void* (*prte_calloc)           ( ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align ),
++   void* (*prte_zmalloc)          ( ThreadId tid, const char *type, SizeT n,
++           unsigned align ),
++   void* (*prte_realloc)          ( ThreadId tid, void* p, SizeT new_size,
++           unsigned align ),
++   void* (*prte_malloc_socket)    ( ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket ),
++   void* (*prte_calloc_socket)    ( ThreadId tid, const char *type, SizeT nmemb,
++           SizeT size1, unsigned align, int socket ),
++   void* (*prte_zmalloc_socket)   ( ThreadId tid, const char *type, SizeT n,
++           unsigned align, int socket ),
++   void  (*prte_free)             ( ThreadId tid, void* p ),
+    SizeT client_malloc_redzone_szB
+ );
+ 
+--- a/massif/ms_main.c
++++ b/massif/ms_main.c
+@@ -1421,6 +1421,77 @@
+    return ( hc ? hc->req_szB + hc->slop_szB : 0 );
+ }                                                            
+ 
++static void* ms_rte_malloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_record_block( tid, n, align, /*is_zeroed*/False );
++}
++
++static void* ms_rte_calloc ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_record_block( tid, nmemb*size1, align, /*is_zeroed*/True );
++}
++
++static void* ms_rte_zmalloc ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return alloc_and_record_block( tid, n, align, /*is_zeroed*/True );
++}
++
++static void* ms_rte_realloc ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   /* Round up to minimum alignment if necessary. */
++   if (align < VG_(clo_alignment))
++       align = VG_(clo_alignment);
++   /* Round up to nearest power-of-two if necessary (like glibc). */
++   while (0 != (align & (align - 1))) align++;
++
++   return realloc_block(tid, p_old, new_szB, align);
++}
++
++static void* ms_rte_malloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return ms_rte_malloc ( tid, type, n, align );
++}
++
++static void* ms_rte_calloc_socket ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket )
++{
++   return ms_rte_calloc ( tid, type, nmemb, size1, align );
++}
++
++static void* ms_rte_zmalloc_socket ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++    return ms_rte_zmalloc ( tid, type, n, align );
++}
++
++static void ms_rte_free ( ThreadId tid, void* p )
++{
++   ms_free ( tid, p );
++}
++
+ //------------------------------------------------------------//
+ //--- Page handling                                        ---//
+ //------------------------------------------------------------//
+@@ -2101,6 +2172,14 @@
+                                    ms___builtin_vec_delete,
+                                    ms_realloc,
+                                    ms_malloc_usable_size,
++                                   ms_rte_malloc,
++                                   ms_rte_calloc,
++                                   ms_rte_zmalloc,
++                                   ms_rte_realloc,
++                                   ms_rte_malloc_socket,
++                                   ms_rte_calloc_socket,
++                                   ms_rte_zmalloc_socket,
++                                   ms_rte_free,
+                                    0 );
+ 
+    // HP_Chunks.
+--- a/memcheck/mc_include.h
++++ b/memcheck/mc_include.h
+@@ -161,6 +161,22 @@
+ void* MC_(realloc)              ( ThreadId tid, void* p, SizeT new_size );
+ SizeT MC_(malloc_usable_size)   ( ThreadId tid, void* p );
+ 
++void* MC_(rte_malloc)           ( ThreadId tid, const char *type, SizeT n,
++        unsigned align );
++void* MC_(rte_calloc)           ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align );
++void* MC_(rte_zmalloc)          ( ThreadId tid, const char *type, SizeT n,
++        unsigned align );
++void* MC_(rte_realloc)          ( ThreadId tid, void* p, SizeT new_size,
++        unsigned align );
++void* MC_(rte_malloc_socket)    ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket );
++void* MC_(rte_calloc_socket)    ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket );
++void* MC_(rte_zmalloc_socket)   ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket );
++void  MC_(rte_free)             ( ThreadId tid, void* p );
++
+ void MC_(handle_resizeInPlace)(ThreadId tid, Addr p,
+                                SizeT oldSizeB, SizeT newSizeB, SizeT rzB);
+ 
+--- a/memcheck/mc_main.c
++++ b/memcheck/mc_main.c
+@@ -8203,6 +8203,14 @@
+                                    MC_(__builtin_vec_delete),
+                                    MC_(realloc),
+                                    MC_(malloc_usable_size), 
++                                   MC_(rte_malloc),
++                                   MC_(rte_calloc),
++                                   MC_(rte_zmalloc),
++                                   MC_(rte_realloc),
++                                   MC_(rte_malloc_socket),
++                                   MC_(rte_calloc_socket),
++                                   MC_(rte_zmalloc_socket),
++                                   MC_(rte_free),
+                                    MC_MALLOC_DEFAULT_REDZONE_SZB );
+    MC_(Malloc_Redzone_SzB) = VG_(malloc_effective_client_redzone_size)();
+ 
+--- a/memcheck/mc_malloc_wrappers.c
++++ b/memcheck/mc_malloc_wrappers.c
+@@ -695,6 +695,97 @@
+    }
+ }
+ 
++void* MC_(rte_malloc) ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   if (MC_(record_fishy_value_error)(tid, "rte_malloc", "size", n)) {
++      return NULL;
++   } else {
++      /* Round up to minimum alignment if necessary. */
++      if (align < VG_(clo_alignment))
++          align = VG_(clo_alignment);
++      /* Round up to nearest power-of-two if necessary (like glibc). */
++      while (0 != (align & (align - 1))) align++;
++
++      return MC_(new_block) ( tid, 0, n, align,
++         /*is_zeroed*/False, MC_AllocMalloc, MC_(malloc_list));
++   }
++}
++
++void* MC_(rte_calloc) ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align )
++{
++   if (MC_(record_fishy_value_error)(tid, "rte_calloc", "nmemb", nmemb) ||
++       MC_(record_fishy_value_error)(tid, "rte_calloc", "size", size1)) {
++      return NULL;
++   } else {
++      /* Round up to minimum alignment if necessary. */
++      if (align < VG_(clo_alignment))
++          align = VG_(clo_alignment);
++      /* Round up to nearest power-of-two if necessary (like glibc). */
++      while (0 != (align & (align - 1))) align++;
++
++      return MC_(new_block) ( tid, 0, nmemb*size1, align,
++         /*is_zeroed*/True, MC_AllocMalloc, MC_(malloc_list));
++   }
++}
++
++void* MC_(rte_zmalloc) ( ThreadId tid, const char *type, SizeT n,
++        unsigned align )
++{
++   if (MC_(record_fishy_value_error)(tid, "rte_zmalloc", "size", n)) {
++      return NULL;
++   } else {
++      /* Round up to minimum alignment if necessary. */
++      if (align < VG_(clo_alignment))
++          align = VG_(clo_alignment);
++      /* Round up to nearest power-of-two if necessary (like glibc). */
++      while (0 != (align & (align - 1))) align++;
++
++      return MC_(new_block) ( tid, 0, n, align,
++         /*is_zeroed*/True, MC_AllocMalloc, MC_(malloc_list));
++   }
++}
++
++void* MC_(rte_realloc) ( ThreadId tid, void* p_old, SizeT new_szB,
++        unsigned align )
++{
++   if (MC_(record_fishy_value_error)(tid, "realloc", "size", new_szB)) {
++      return NULL;
++   } else {
++      /* Round up to minimum alignment if necessary. */
++      if (align < VG_(clo_alignment))
++          align = VG_(clo_alignment);
++      /* Round up to nearest power-of-two if necessary (like glibc). */
++      while (0 != (align & (align - 1))) align++;
++
++      return renew_block ( tid, p_old, new_szB, align );
++   }
++}
++
++void* MC_(rte_malloc_socket) ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return MC_(rte_malloc) ( tid, "", n, align );
++}
++
++void* MC_(rte_calloc_socket) ( ThreadId tid, const char *type, SizeT nmemb,
++        SizeT size1, unsigned align, int socket )
++{
++   return MC_(rte_calloc) ( tid, "", nmemb, size1, align );
++}
++
++void* MC_(rte_zmalloc_socket) ( ThreadId tid, const char *type, SizeT n,
++        unsigned align, int socket )
++{
++   return MC_(rte_zmalloc) ( tid, "", n, align );
++}
++
++void MC_(rte_free) ( ThreadId tid, void* p )
++{
++   MC_(free) ( tid, p );
++}
++
+ 
+ /*------------------------------------------------------------*/
+ /*--- Memory pool stuff.                                   ---*/
